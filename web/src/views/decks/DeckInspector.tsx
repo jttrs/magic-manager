@@ -18,7 +18,7 @@ import { useReportMarked } from './marked';
 import { SourceMark } from './RecipeList';
 
 /** A deck you track: its cards with owned / pledged / unused, and its actions. */
-export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded, onView, onBack, onMarked }: { slug: string; recipe?: RecipeOut; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void; onMarked?: (m: MarkedCopy | null) => void }) {
+export function DeckInspector({ slug, recipe, threshold, view, autoAdd = false, onAutoAdded, onView, onBack, onMarked }: { slug: string; recipe?: RecipeOut; threshold?: number; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void; onMarked?: (m: MarkedCopy | null) => void }) {
   const q = useQuery(deckQuery(slug));
   const { selected, toggle, clear } = useSelection(`deck:${slug}`);
   const [seed, setSeed] = useState<AddCardsSeed | null>(null);
@@ -54,7 +54,7 @@ export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded
             {fmtCount(deck.cards, 'card')} · {fmtUsd(deck.value_usd)}
             {deck.built > 0 && ` · ×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`}
             {recipe && recipe.loose > 0 && ` · ${fmtInt(recipe.loose)} ${recipe.origin === 'import' || recipe.origin === 'custom' ? 'not built' : 'loose'}`}
-            {recipe && coverage(recipe) && ` · ${coverage(recipe)}`}
+            {recipe && coverage(recipe, threshold) && ` · ${coverage(recipe, threshold)}`}
             <span className="ml-1 inline-flex align-middle">
               <InfoTip label="What do built, pledged and unused mean?" tone="paper">
                 <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as unused. <b>Unused</b>: copies you own that aren’t in a built deck. Breaking a deck down returns its cards to your collection.

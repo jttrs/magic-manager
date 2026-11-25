@@ -22,7 +22,7 @@ test('find products: scan, uncheck one, record the rest', async ({ page }) => {
   await expect(dialog).toContainText('its shared cards went to Crack the Plates');
   await dialog.getByRole('checkbox', { name: /Treasures of Smaug/ }).uncheck();
   await dialog.getByRole('button', { name: 'Record 1 product' }).click();
-  await expect(dialog).toContainText('Recorded 1 product. 6 cards now show where they came from');
+  await expect(dialog).toContainText('Recorded 1 product in Purchase history, covering 6 cards.');
   expect(applied).toEqual({ expect: ['A_HOB'], picks: [] });
   expect(await page.evaluate(() => localStorage.getItem('mm.trueup.notMine'))).toBe('["B_HOB"]');
 });

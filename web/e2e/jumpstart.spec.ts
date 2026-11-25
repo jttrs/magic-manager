@@ -60,16 +60,16 @@ test('one Jumpstart set in view: the Buy strip copies either shopping list', asy
     buys.push(body);
     return r.fulfill({ json: { text: `${body.shop}:${body.target}`, lines: 1 } });
   });
-  await page.goto('/decks?sets=%5B%22msh%22%5D');
-  await expect(page.getByText('Copy bulk lists · 42 cards to build every theme · ≈ $29.25 at market')).toBeVisible();
+  await page.goto('/decks?status=built,buildable,unbuilt&sets=%5B%22msh%22%5D');
   await page.getByRole('button', { name: 'Copy ManaPool list' }).click();
+  await expect(page.getByText('Copied 42 cards to build every theme · ≈ $29.25 at market for ManaPool')).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('buildable:manapool');
   await page.getByRole('radio', { name: 'Packs I don’t own' }).click();
   await expect(page).toHaveURL(/shop=packs/);
   await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
   expect(buys).toEqual([{ shop: 'buildable', target: 'manapool' }, { shop: 'packs', target: 'tcgplayer' }]);
   // A set without Jumpstart packs has no Buy strip.
-  await page.goto('/decks?sets=%5B%22msc%22%5D');
+  await page.goto('/decks?status=built,buildable,unbuilt&sets=%5B%22msc%22%5D');
   await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: /Buy/ })).toHaveCount(0);
 });
@@ -82,7 +82,7 @@ test('a recipe never read reads its card list once, then shows it', async ({ pag
     '/api/recipes/SpiderSociety_MSC': () => ({ json: ready ? { ...spider, ready: true, cards: ARMED.cards } : { ...spider, ready: false, cards: [] } }),
   });
   await mockJob(page, submitted, () => (ready = true));
-  await page.goto('/decks?own=%5B%22none%22%5D&deck=fn%3ASpiderSociety_MSC&view=list');
+  await page.goto('/decks?status=unbuilt&deck=fn%3ASpiderSociety_MSC&view=list');
   await expect(page.getByRole('button', { name: 'Inspect Iron Fist' })).toBeVisible();
   expect(submitted).toEqual([{ file_names: ['SpiderSociety_MSC'] }]);
 });
@@ -97,7 +97,7 @@ test('a failed read says why and Try again starts it once more', async ({ page }
   });
   const FAILED = sse([['status', { status: 'running' }], ['error', { error: 'Couldn’t sync prices for card set(s): MSC.' }], ['status', { status: 'failed' }]]);
   await page.route('**/api/jobs/rf*/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: FAILED }));
-  await page.goto('/decks?own=%5B%22none%22%5D&deck=fn%3ASpiderSociety_MSC');
+  await page.goto('/decks?status=unbuilt&deck=fn%3ASpiderSociety_MSC');
   await expect(page.getByRole('alert')).toContainText('MSC');
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect.poll(() => submitted.length).toBe(2);
@@ -107,7 +107,7 @@ test('one set in view: read every unread recipe in it', async ({ page }) => {
   const submitted: unknown[] = [];
   await mockApi(page);
   await mockJob(page, submitted, () => {});
-  await page.goto('/decks?own=%5B%22built%22%2C%22loose%22%2C%22none%22%5D&sets=%5B%22msc%22%5D');
+  await page.goto('/decks?status=built,buildable,unbuilt&sets=%5B%22msc%22%5D');
   await page.getByRole('toolbar', { name: 'Deck list actions' }).getByRole('button', { name: 'Read 1 unread recipe in MSC' }).click();
   await expect.poll(() => submitted).toEqual([{ set: 'msc' }]);
 });

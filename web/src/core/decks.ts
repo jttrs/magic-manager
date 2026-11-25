@@ -9,15 +9,13 @@ import { TYPE_GROUPS, typeGroup } from './cardFacts';
 import { facetCounts, passes, type Facets } from './facets';
 import { fmtCount, fmtInt } from './format';
 import { treatmentLabels, type GuideCard, type GuideGroup } from './guideCard';
-import { COVER, OWNERSHIP, RECIPE_ORIGINS, type DecksSearch } from './search';
+import { DECK_STATUS, RECIPE_ORIGINS, type DeckStatus, type DecksSearch } from './search';
 
 export const DECK_GROUPS = ['set', 'year', 'kind', 'type', 'color', 'state'] as const;
 export type DeckGroupBy = (typeof DECK_GROUPS)[number];
 export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', kind: 'Source', type: 'Deck type', color: 'Color', state: 'Status' };
 
 export type RecipeOrigin = (typeof RECIPE_ORIGINS)[number];
-export type Ownership = (typeof OWNERSHIP)[number];
-export type Cover = (typeof COVER)[number];
 export const SOURCE_LABEL: Record<RecipeOrigin, string> = { precon: 'Wizards', import: 'Imported', custom: 'Custom' };
 /** Jumpstart is a deck type, not a source. */
 export const isJumpstart = (r: Pick<RecipeOut, 'deck_type'>): boolean => r.deck_type === 'Jumpstart';
@@ -33,36 +31,42 @@ export function effectiveTypes(f: Pick<DecksSearch, 'types' | 'sets'>): string[]
 }
 /** The picker's value → the URL's `types` ("show all" is stored so it sticks). */
 export const typesToSearch = (v: string[]): string[] => (v.length ? v : [ALL_TYPES]);
-const OWNERSHIP_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'Not owned' };
-/** The sidebar's "Status" toggles: Built · Loose · Recipes. */
-const OWN_TOGGLE_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'Recipes' };
-export const COVER_LABEL: Record<Cover, string> = { any: 'Any', build: 'Ready to build', close: 'Ready or close' };
+const STATUS_LABEL: Record<DeckStatus, string> = { built: 'Built', buildable: 'Buildable', unbuilt: 'Unbuilt' };
+/** How many cards short a recipe may be and still count as Buildable (Settings → Decks; the engine's CLOSE_SHORT). */
+export const DEFAULT_BUILDABLE_SHORT = 3;
 
-export type RecipeFilters = Pick<DecksSearch, 'q' | 'origins' | 'own' | 'cover' | 'types' | 'sets'>;
+export type RecipeFilters = Pick<DecksSearch, 'q' | 'origins' | 'status' | 'types' | 'sets'>;
 
-/** Unused-card status when it applies: a built recipe's cards are pledged, so it has none. */
-const coverStatus = (r: Pick<RecipeOut, 'built' | 'status'>) => (r.built === 0 ? r.status : null);
-const readyFromUnused = (r: Pick<RecipeOut, 'built' | 'status'>) => coverStatus(r) === 'build';
-
-const coverKeep = (r: RecipeOut, cover: Cover) =>
-  cover === 'any' || readyFromUnused(r) || (cover === 'close' && coverStatus(r) === 'close');
+/** A recipe's decklist status: Built (an assembled copy), Buildable (not built, read, and your unused
+ *  cards leave it at most `threshold` cards short) or Unbuilt (everything else, incl. unread recipes). */
+export function deckStatus(r: Pick<RecipeOut, 'built' | 'read' | 'short'>, threshold: number = DEFAULT_BUILDABLE_SHORT): DeckStatus {
+  if (r.built > 0) return 'built';
+  return r.read && r.short != null && r.short <= threshold ? 'buildable' : 'unbuilt';
+}
+/** How far your unused cards get a read recipe: ready (nothing short), close (at most `threshold` short) or far;
+ *  null when its card list hasn't been read. Derived from `short` and the user's threshold, never the server's status. */
+export function readiness(r: Pick<RecipeOut, 'read' | 'short'>, threshold: number = DEFAULT_BUILDABLE_SHORT): 'ready' | 'close' | 'far' | null {
+  if (!r.read || r.short == null) return null;
+  return r.short === 0 ? 'ready' : r.short <= threshold ? 'close' : 'far';
+}
+/** Not built and ready to build from unused cards, whatever the threshold. */
+const readyFromUnused = (r: Pick<RecipeOut, 'built' | 'read' | 'short'>) => r.built === 0 && readiness(r) === 'ready';
 
 /** One predicate per recipe filter (see `core/facets`). */
-function recipeFacets(f: RecipeFilters): Facets<RecipeOut, keyof RecipeFilters> {
+function recipeFacets(f: RecipeFilters, threshold: number): Facets<RecipeOut, keyof RecipeFilters> {
   const q = f.q.trim().toLowerCase();
   const types = effectiveTypes(f);
   return {
     origins: (r) => !f.origins.length || f.origins.includes(r.origin),
-    own: (r) => f.own.includes(r.ownership),
-    cover: (r) => coverKeep(r, f.cover),
+    status: (r) => f.status.includes(deckStatus(r, threshold)),
     types: (r) => types == null || types.includes(r.deck_type),
     sets: (r) => !f.sets.length || (!!r.set_code && f.sets.includes(r.set_code)),
     q: (r) => !q || [r.name, r.set_name, r.set_code, r.source, r.author, r.deck_type, SOURCE_LABEL[r.origin]].some((v) => v?.toLowerCase().includes(q)),
   };
 }
 
-export function filterRecipes(rs: readonly RecipeOut[], f: RecipeFilters): RecipeOut[] {
-  const facets = recipeFacets(f);
+export function filterRecipes(rs: readonly RecipeOut[], f: RecipeFilters, threshold: number = DEFAULT_BUILDABLE_SHORT): RecipeOut[] {
+  const facets = recipeFacets(f, threshold);
   return rs.filter((r) => passes(r, facets));
 }
 
@@ -80,25 +84,23 @@ export function deckTypeCounts(rows: readonly { deck_type: string }[]): Count[] 
 }
 
 /** Counts per option of one control, under every OTHER filter. */
-export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
-  const facets = recipeFacets(f);
+export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters, threshold: number = DEFAULT_BUILDABLE_SHORT) {
+  const facets = recipeFacets(f, threshold);
   const by = (skip: keyof RecipeFilters, key: (r: RecipeOut) => string | null) => facetCounts(rs, facets, skip, key);
   const origins = by('origins', (r) => r.origin);
-  const own = by('own', (r) => r.ownership);
+  const status = by('status', (r) => deckStatus(r, threshold));
   const types = by('types', (r) => r.deck_type);
   // Choosing a set lifts the Commander default, so sets are counted without it — a
   // Jumpstart-only set must stay listed to be pickable.
-  const setFacets = f.types.length ? facets : recipeFacets({ ...f, types: [ALL_TYPES] });
+  const setFacets = f.types.length ? facets : recipeFacets({ ...f, types: [ALL_TYPES] }, threshold);
   const sets = facetCounts(rs, setFacets, 'sets', (r) => r.set_code);
-  const cover = by('cover', coverStatus);
   const names = new Map<string, { name: string; released: string }>();
   for (const r of rs) if (r.set_code && !names.has(r.set_code)) names.set(r.set_code, { name: r.set_name ?? r.set_code.toUpperCase(), released: r.released ?? '' });
   const sorted = (m: Map<string, number>, keepKeys: readonly string[] = []): [string, number][] =>
     [...new Set([...m.keys(), ...keepKeys])].map((k) => [k, m.get(k) ?? 0] as [string, number]);
   return {
     origins: RECIPE_ORIGINS.map((k) => ({ value: k, label: SOURCE_LABEL[k], count: origins.get(k) ?? 0 })),
-    own: OWNERSHIP.map((k) => ({ value: k, label: OWN_TOGGLE_LABEL[k], count: own.get(k) ?? 0 })),
-    cover: { any: null, build: cover.get('build') ?? 0, close: (cover.get('build') ?? 0) + (cover.get('close') ?? 0) },
+    status: DECK_STATUS.map((k) => ({ value: k, label: STATUS_LABEL[k], count: status.get(k) ?? 0 })),
     types: typeOptions(sorted(types, f.types.filter((t) => t !== ALL_TYPES))),
     sets: sorted(sets, f.sets)
       .sort((a, b) => (names.get(b[0])?.released ?? '').localeCompare(names.get(a[0])?.released ?? '') || a[0].localeCompare(b[0]))
@@ -115,10 +117,10 @@ export const colorLabel = (code: string): string => COLOR_NAME[code] ?? code;
 export type DeckGroup = { key: string; label: string; decks: RecipeOut[]; ready: number };
 
 const ORIGIN_RANK: Record<RecipeOrigin, string> = { precon: '2', import: '1', custom: '0' };
-const OWN_RANK: Record<Ownership, string> = { built: '2', loose: '1', none: '0' };
+const STATUS_RANK: Record<DeckStatus, string> = { built: '2', buildable: '1', unbuilt: '0' };
 
 /** Group recipes; groups newest first for set/year, a fixed order otherwise. Recipes keep input order. */
-export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGroup[] {
+export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy, threshold: number = DEFAULT_BUILDABLE_SHORT): DeckGroup[] {
   const keyOf = (r: RecipeOut): [string, string, string] => {
     switch (by) {
       case 'set':
@@ -130,7 +132,10 @@ export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGro
       case 'kind':
         return [r.origin, SOURCE_LABEL[r.origin], ORIGIN_RANK[r.origin]];
       case 'state':
-        return [r.ownership, OWNERSHIP_LABEL[r.ownership], OWN_RANK[r.ownership]];
+        {
+        const st = deckStatus(r, threshold);
+        return [st, STATUS_LABEL[st], STATUS_RANK[st]];
+      }
       case 'type':
         return [r.deck_type, r.deck_type, ''];
       case 'color': {
@@ -163,19 +168,21 @@ export function ownershipLabel(r: Pick<RecipeOut, 'ownership' | 'built' | 'loose
 }
 
 /** How far unused cards get you: "All 20 unused" · "2 short" · "13 of 20 unused"; '' when unknown or built. */
-export function coverage(r: Pick<RecipeOut, 'have' | 'short' | 'status' | 'built'>): string {
+export function coverage(r: Pick<RecipeOut, 'have' | 'short' | 'read' | 'built'>, threshold: number = DEFAULT_BUILDABLE_SHORT): string {
   if (r.have == null || r.short == null || r.built > 0) return '';
   const total = r.have + r.short;
-  if (r.status === 'build') return `All ${fmtInt(total)} unused`;
-  if (r.status === 'close') return `${fmtInt(r.short)} short`;
+  const ready = readiness(r, threshold);
+  if (ready === 'ready') return `All ${fmtInt(total)} unused`;
+  if (ready === 'close') return `${fmtInt(r.short)} short`;
   return `${fmtInt(r.have)} of ${fmtInt(total)} unused`;
 }
 
 /** The sheet summary: what's listed and what you own of it. */
-export function recipeSummary(shown: readonly RecipeOut[]): string {
-  const built = shown.filter((r) => r.ownership === 'built').length;
-  const ready = shown.filter(readyFromUnused).length;
-  return [fmtCount(shown.length, 'recipe'), built ? `${fmtInt(built)} built` : '', ready ? `${fmtInt(ready)} ready from unused cards` : ''].filter(Boolean).join(' · ');
+export function recipeSummary(shown: readonly RecipeOut[], threshold: number = DEFAULT_BUILDABLE_SHORT): string {
+  const n = (st: DeckStatus) => shown.filter((r) => deckStatus(r, threshold) === st).length;
+  const built = n('built');
+  const buildable = n('buildable');
+  return [fmtCount(shown.length, 'recipe'), built ? `${fmtInt(built)} built` : '', buildable ? `${fmtInt(buildable)} buildable from unused cards` : ''].filter(Boolean).join(' · ');
 }
 
 /** The one Jumpstart set the list is narrowed to (its shopping lists apply), else null. */
@@ -271,3 +278,6 @@ export function deckReviewLines(cards: readonly DeckCardOut[], keys?: ReadonlySe
       note: null,
     }));
 }
+
+/** Unread recipes in view — they count as Unbuilt until read. */
+export const unreadCount = (rs: readonly RecipeOut[]): number => rs.filter((r) => !r.read).length;

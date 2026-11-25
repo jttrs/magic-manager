@@ -174,7 +174,7 @@ test('adding cards refreshes the inspector’s Your copies (PR87-2)', async ({ p
   let holdings = 0;
   await page.route('**/api/cards/*/holdings', (r) => {
     holdings++;
-    return r.fulfill({ json: { scryfall_id: 'x', owned: { nonfoil: holdings }, pledged: {}, free: { nonfoil: holdings }, decks: [], sources: [], other_printings_owned: 0 } });
+    return r.fulfill({ json: { scryfall_id: 'x', owned: { nonfoil: holdings }, pledged: {}, free: { nonfoil: holdings }, decks: [], other_printings_owned: 0 } });
   });
   await page.route('**/api/ingest/search**', (r) => r.fulfill({ json: { query: 'sol', source: 'local', printings: [printing('sol1')] } }));
   await captureCommit(page);

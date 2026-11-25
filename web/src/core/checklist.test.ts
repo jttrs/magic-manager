@@ -6,7 +6,7 @@ const card = (over: Partial<CollectionCardOut> = {}): CollectionCardOut => ({
   scryfall_id: 'a', oracle_id: null, name: 'Alpha', family: 'tst', set_code: 'tst', collector_number: '1', rarity: 'rare',
   type_line: null, cmc: null, color_identity: [], released_at: null, finishes: ['nonfoil', 'foil'],
   owned: { nonfoil: 3 }, pledged: {}, price_usd: 2, price_usd_foil: 5, image_uri: null, scryfall_url: null,
-  treatment: '', standard_frame: true, is_bulk: false, is_chase: false, functions: [], card_owned: 3, sources: [],
+  treatment: '', standard_frame: true, is_bulk: false, is_chase: false, functions: [], card_owned: 3,
   ...over,
 });
 

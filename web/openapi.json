@@ -4181,16 +4181,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplyIn"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4967,24 +4957,6 @@
         ],
         "title": "AdminUsersOut"
       },
-      "ApplyIn": {
-        "properties": {
-          "lines": {
-            "items": {
-              "$ref": "#/components/schemas/DecisionIn"
-            },
-            "type": "array",
-            "maxItems": 2000,
-            "title": "Lines"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "lines"
-        ],
-        "title": "ApplyIn"
-      },
       "ApplyOut": {
         "properties": {
           "purchase_id": {
@@ -4995,20 +4967,16 @@
             "type": "integer",
             "title": "Ingest Id"
           },
-          "matched": {
-            "type": "integer",
-            "title": "Matched"
-          },
           "added": {
             "type": "integer",
-            "title": "Added"
+            "title": "Added",
+            "description": "Cards added to your collection (every single of the order not yet added)."
           }
         },
         "type": "object",
         "required": [
           "purchase_id",
           "ingest_id",
-          "matched",
           "added"
         ],
         "title": "ApplyOut"
@@ -6279,39 +6247,6 @@
         ],
         "title": "CardProfileOut"
       },
-      "CardSourceOut": {
-        "properties": {
-          "source": {
-            "$ref": "#/components/schemas/SourceOut"
-          },
-          "finish": {
-            "type": "string",
-            "enum": [
-              "nonfoil",
-              "foil"
-            ],
-            "title": "Finish"
-          },
-          "copies": {
-            "type": "integer",
-            "title": "Copies",
-            "description": "Copies acquired from this source (history: may exceed what is owned today)."
-          },
-          "acquisitions": {
-            "type": "integer",
-            "title": "Acquisitions",
-            "description": "Separate ingests from this source (e.g. 2 = two purchases of the same product).",
-            "default": 1
-          }
-        },
-        "type": "object",
-        "required": [
-          "source",
-          "finish",
-          "copies"
-        ],
-        "title": "CardSourceOut"
-      },
       "CartAuditOut": {
         "properties": {
           "lines": {
@@ -7255,14 +7190,6 @@
             "description": "Copies of this card owned in any printing, any set.",
             "default": 0
           },
-          "sources": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Sources",
-            "description": "Source keys this owned printing's copies were acquired from (see CollectionOut.sources)."
-          },
           "scene": {
             "anyOf": [
               {
@@ -7609,14 +7536,6 @@
             "type": "array",
             "title": "Functions",
             "description": "Function roots, display order."
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/SourceOut"
-            },
-            "type": "array",
-            "title": "Sources",
-            "description": "Every source behind an owned printing in this view, most printings first."
           },
           "scenes": {
             "items": {
@@ -8714,35 +8633,6 @@
           "n"
         ],
         "title": "DayCount"
-      },
-      "DecisionIn": {
-        "properties": {
-          "line_no": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Line No"
-          },
-          "match": {
-            "type": "integer",
-            "maximum": 9999.0,
-            "minimum": 0.0,
-            "title": "Match",
-            "default": 0
-          },
-          "add": {
-            "type": "integer",
-            "maximum": 9999.0,
-            "minimum": 0.0,
-            "title": "Add",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "line_no"
-        ],
-        "title": "DecisionIn"
       },
       "DeckCardOut": {
         "properties": {
@@ -11364,13 +11254,6 @@
             "type": "array",
             "title": "Decks"
           },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/CardSourceOut"
-            },
-            "type": "array",
-            "title": "Sources"
-          },
           "other_printings_owned": {
             "type": "integer",
             "title": "Other Printings Owned",
@@ -11384,7 +11267,6 @@
           "pledged",
           "free",
           "decks",
-          "sources",
           "other_printings_owned"
         ],
         "title": "HoldingsOut"
@@ -14422,7 +14304,7 @@
           "assigned": {
             "type": "integer",
             "title": "Assigned",
-            "description": "Copies matched to cards you owned or added new."
+            "description": "Copies added to your collection (plus legacy matches)."
           },
           "assignable": {
             "type": "integer",
@@ -14571,6 +14453,10 @@
             "type": "array",
             "title": "Purchases"
           },
+          "totals": {
+            "$ref": "#/components/schemas/TotalsOut",
+            "description": "Everything paid vs. what the whole collection is worth today."
+          },
           "paid_usd": {
             "type": "number",
             "title": "Paid Usd"
@@ -14591,6 +14477,7 @@
         "type": "object",
         "required": [
           "purchases",
+          "totals",
           "paid_usd",
           "compared_paid_usd",
           "worth_usd",
@@ -15707,7 +15594,8 @@
           },
           "matched": {
             "type": "integer",
-            "title": "Matched"
+            "title": "Matched",
+            "description": "Legacy: copies matched to cards you owned before matching was retired."
           },
           "added": {
             "type": "integer",
@@ -15715,16 +15603,12 @@
           },
           "remaining": {
             "type": "integer",
-            "title": "Remaining"
+            "title": "Remaining",
+            "description": "Quantity not yet in your collection (singles with a known printing)."
           },
           "owned": {
             "type": "integer",
             "title": "Owned"
-          },
-          "matchable": {
-            "type": "integer",
-            "title": "Matchable",
-            "description": "Owned copies whose source is unknown or singles \u2014 they can be matched to this order."
           }
         },
         "type": "object",
@@ -15742,8 +15626,7 @@
           "matched",
           "added",
           "remaining",
-          "owned",
-          "matchable"
+          "owned"
         ],
         "title": "ReviewLineOut"
       },
@@ -16395,55 +16278,6 @@
           "finish"
         ],
         "title": "SldEditionOut"
-      },
-      "SourceOut": {
-        "properties": {
-          "key": {
-            "type": "string",
-            "title": "Key",
-            "description": "'singles' | 'unknown' | 'product:<MTGJSON fileName>' | 'purchase:<store>:<order id>'"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "singles",
-              "unknown",
-              "deck",
-              "pool",
-              "purchase"
-            ],
-            "title": "Kind",
-            "description": "deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; purchase = a store order you read with the companion; unknown = provenance not reconstructed."
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "set_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Set Code"
-          },
-          "printings": {
-            "type": "integer",
-            "title": "Printings",
-            "description": "Owned printings in this view acquired from this source.",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "required": [
-          "key",
-          "kind",
-          "label"
-        ],
-        "title": "SourceOut"
       },
       "StoreTabsOut": {
         "properties": {
@@ -17471,6 +17305,58 @@
           "sessions_with_errors"
         ],
         "title": "Totals"
+      },
+      "TotalsOut": {
+        "properties": {
+          "orders": {
+            "type": "integer",
+            "title": "Orders"
+          },
+          "paid_usd": {
+            "type": "number",
+            "title": "Paid Usd",
+            "description": "Item prices \u00d7 quantity across every line of every order."
+          },
+          "singles_paid_usd": {
+            "type": "number",
+            "title": "Singles Paid Usd"
+          },
+          "sealed_paid_usd": {
+            "type": "number",
+            "title": "Sealed Paid Usd"
+          },
+          "other_paid_usd": {
+            "type": "number",
+            "title": "Other Paid Usd"
+          },
+          "collection_value_usd": {
+            "type": "number",
+            "title": "Collection Value Usd",
+            "description": "Today's value of your whole collection at local prices (not just what was bought)."
+          },
+          "collection_unpriced": {
+            "type": "integer",
+            "title": "Collection Unpriced",
+            "description": "Collection rows with no price (not counted in the value)."
+          },
+          "gain_usd": {
+            "type": "number",
+            "title": "Gain Usd",
+            "description": "collection_value_usd - paid_usd."
+          }
+        },
+        "type": "object",
+        "required": [
+          "orders",
+          "paid_usd",
+          "singles_paid_usd",
+          "sealed_paid_usd",
+          "other_paid_usd",
+          "collection_value_usd",
+          "collection_unpriced",
+          "gain_usd"
+        ],
+        "title": "TotalsOut"
       },
       "TreeNodeOut": {
         "properties": {

@@ -7,14 +7,16 @@ for what happens next:
 * :func:`save` stores each order as a ``purchases`` row + its ``purchase_lines``
   (deduped by store + order id). Saving never touches inventory — an order can
   sit "read, not yet assigned" for as long as you like.
-* :func:`review` shows, per line, how many copies you already own that could be
-  this purchase (copies whose source is *unknown* or *singles*, not another
-  purchase or a product), so you can **match** them, and how many to **add**.
-* :func:`apply` writes the decision to the V19 ledger in ONE transaction: one
-  ``purchase`` ingest event per order, dated at the order date. Adds are +deltas
-  (``inventory.inventory_add``); matches are net-zero re-attribution through
-  :func:`ingest.reattribute` (the same seam product true-up uses). The ledger
-  invariant ``inventory == SUM(delta)`` is checked before commit.
+* :func:`review` lists one order's lines read-only: what you paid, what each is
+  worth today and how many copies of the printing you own.
+* :func:`add_to_collection` adds EVERY single line with a known printing that
+  isn't in your collection yet, in ONE transaction: one ``purchase`` ingest event
+  per order, dated at the order date (``inventory.inventory_add`` +deltas). The
+  ledger invariant ``inventory == SUM(delta)`` is checked before commit. Sealed
+  products and other lines are recorded only, never added. Copies are not tied to
+  individual orders: :func:`totals` just compares everything paid to what the
+  whole collection is worth today. (``purchase_lines.matched`` is a legacy count
+  from the retired per-line matching; it still reads, nothing writes it.)
 
 Prices are stored in cents per line (unit price as the store listed it), plus
 the order's shipping / tax / fees / store credit as the store showed them.
@@ -333,55 +335,16 @@ class ReviewLine:
     quantity: int
     unit_usd: float | None
     today_usd: float | None
-    matched: int
+    matched: int              # legacy: copies matched to owned cards before matching was retired
     added: int
-    remaining: int            # quantity - matched - added
+    remaining: int            # quantity - matched - added (singles with a printing: still to add)
     owned: int                # copies of this printing + finish you own now
-    matchable: int            # owned copies not already from a purchase or a product (can be matched)
 
 
 @dataclass
 class Review:
     purchase: PurchaseSummary
     lines: list[ReviewLine]
-
-
-def _matchable_sources(conn, sids: Iterable[str]) -> list[tuple[int, dict[tuple[str, str], int]]]:
-    """Ordered ``(ingest_id, {(sid, finish): copies})`` sources a purchase may draw
-    owned copies from: each event's HELD copies (provenance's LIFO netting, so a
-    removed copy is never matched) for events whose source is unknown or singles —
-    never another purchase or a product. Unknown buckets first, then singles
-    newest first."""
-    from .provenance import _classify, _held, _products
-    held = _held(conn, sids)
-    ev_ids = {iid for (iid, _s, _f), n in held.items() if n > 0}
-    if not ev_ids:
-        return []
-    products = _products(conn)
-    meta = {r[0]: r for r in conn.execute(
-        f"SELECT ingest_id, method, label, source_path, at FROM ingest_events WHERE ingest_id IN ({','.join('?' * len(ev_ids))})",
-        list(ev_ids))}
-    ranked = []
-    for iid in ev_ids:
-        _, method, label, path, at = meta[iid]
-        if method in ("purchase", "deck-assign", "deck-unassign"):
-            continue
-        src = _classify(method, label, path, products)
-        if src.kind not in ("unknown", "singles"):
-            continue
-        ranked.append((0 if src.kind == "unknown" else 1, at or "", iid))
-    ranked.sort(key=lambda t: (t[0], "" if t[0] == 0 else _neg(t[1]), t[2]))
-    out = []
-    for _r, _at, iid in ranked:
-        bal = {(s, f): n for (i, s, f), n in held.items() if i == iid and n > 0}
-        if bal:
-            out.append((iid, bal))
-    return out
-
-
-def _neg(s: str) -> str:
-    """Sort key that orders ISO strings newest first in an ascending sort."""
-    return "".join(chr(0x10FFFF - ord(ch)) for ch in s)
 
 
 def _get(conn, purchase_id: int):
@@ -392,7 +355,7 @@ def _get(conn, purchase_id: int):
 
 
 def review(purchase_id: int) -> Review:
-    """One order's lines with what you own now and what could be matched."""
+    """One order's lines with what you paid, today's price and what you own now."""
     from .provenance import _priced
     with db.connect() as conn:
         _get(conn, purchase_id)
@@ -403,10 +366,6 @@ def review(purchase_id: int) -> Review:
         owned = {(r[0], r[1]): r[2] for r in conn.execute(
             f"SELECT scryfall_id, finish, quantity FROM inventory WHERE scryfall_id IN ({','.join('?' * len(sids))})",
             list(sids))} if sids else {}
-        avail: dict[tuple[str, str], int] = {}
-        for _iid, bal in _matchable_sources(conn, sids):
-            for k, n in bal.items():
-                avail[k] = avail.get(k, 0) + n
     out = []
     for ln in lines:
         key = (ln["scryfall_id"], ln["finish"])
@@ -416,72 +375,38 @@ def review(purchase_id: int) -> Review:
             unit_usd=_usd(ln["unit_price_cents"]), today_usd=_unit_today(prices, ln["scryfall_id"], ln["finish"]),
             matched=ln["matched"], added=ln["added"], remaining=ln["quantity"] - ln["matched"] - ln["added"],
             owned=owned.get(key, 0) if ln["scryfall_id"] else 0,
-            matchable=avail.get(key, 0) if ln["scryfall_id"] else 0,
         ))
     return Review(summary, out)
 
 
-# ---------- apply ----------
-
-@dataclass
-class Decision:
-    line_no: int
-    match: int = 0
-    add: int = 0
-
+# ---------- add to collection ----------
 
 @dataclass
 class ApplyResult:
     purchase_id: int
     ingest_id: int
-    matched: int
     added: int
 
 
-def apply(purchase_id: int, decisions: Iterable[Decision]) -> ApplyResult:
-    """Assign order lines to your collection in one transaction.
-
-    ``match`` moves that many owned copies' provenance onto the order (net-zero);
-    ``add`` adds new copies. Per line, ``match + add`` may not exceed what's left
-    to assign, and ``match`` may not exceed the matchable copies. Re-applying a
-    fully assigned order raises :class:`AlreadyApplied`. All-or-nothing."""
-    decisions = [d for d in decisions if d.match or d.add]
-    if any(d.match < 0 or d.add < 0 for d in decisions):
-        raise PurchaseError("counts can't be negative")
-    if len({d.line_no for d in decisions}) != len(decisions):
-        raise PurchaseError("a line is listed twice")
+def add_to_collection(purchase_id: int) -> ApplyResult:
+    """Add every single of the order with a known printing that isn't in your
+    collection yet (quantity − already added − legacy matched), in one
+    transaction. Fully added → :class:`AlreadyApplied`; nothing addable (sealed
+    only, or no printing found) → :class:`PurchaseError`. All-or-nothing."""
     with db.connect() as conn:
         p = _get(conn, purchase_id)
-        lines = {ln["line_no"]: ln for ln in conn.execute(
-            "SELECT * FROM purchase_lines WHERE purchase_id = ?", (purchase_id,))}
-        assignable = [ln for ln in lines.values() if ln["scryfall_id"]]
-        if assignable and all(ln["matched"] + ln["added"] >= ln["quantity"] for ln in assignable):
-            raise AlreadyApplied(f"{STORES[p['store']]} order {p['store_order_id']} is already in your collection")
-        if not decisions:
-            raise PurchaseError("nothing to assign")
-        needs: dict[tuple[str, str], int] = {}
-        for d in decisions:
-            ln = lines.get(d.line_no)
-            if ln is None:
-                raise PurchaseError(f"no line {d.line_no} on this order")
-            if not ln["scryfall_id"]:
-                raise PurchaseError(f"line {d.line_no} ({ln['name']}) has no known printing")
-            left = ln["quantity"] - ln["matched"] - ln["added"]
-            if d.match + d.add > left:
-                raise PurchaseError(f"line {d.line_no} ({ln['name']}): only {left} left to assign")
-            if d.match:
-                k = (ln["scryfall_id"], ln["finish"])
-                needs[k] = needs.get(k, 0) + d.match
-        sources = _matchable_sources(conn, {k[0] for k in needs})
-        avail: dict[tuple[str, str], int] = {}
-        for _iid, bal in sources:
-            for k, n in bal.items():
-                avail[k] = avail.get(k, 0) + n
-        short = [k for k, n in needs.items() if n > avail.get(k, 0)]
-        if short:
-            raise PurchaseError(f"{len(short)} line(s) ask to match more copies than you own unassigned")
+        lines = conn.execute("SELECT * FROM purchase_lines WHERE purchase_id = ? ORDER BY line_no",
+                             (purchase_id,)).fetchall()
+        addable = [ln for ln in lines if ln["kind"] == "single" and ln["scryfall_id"]]
+        todo = [(ln, ln["quantity"] - ln["matched"] - ln["added"]) for ln in addable]
+        todo = [(ln, n) for ln, n in todo if n > 0]
+        if not todo:
+            if addable:
+                raise AlreadyApplied(f"{STORES[p['store']]} order {p['store_order_id']} is already in your collection")
+            raise PurchaseError("this order has no single cards with a known printing to add")
         from .provenance import _held
-        held_before = _held(conn, {ln["scryfall_id"] for ln in lines.values() if ln["scryfall_id"]})
+        sids = {ln["scryfall_id"] for ln, _n in todo}
+        held_before = _held(conn, sids)
 
         ingest_id = p["ingest_id"]
         if ingest_id is None:
@@ -489,39 +414,58 @@ def apply(purchase_id: int, decisions: Iterable[Decision]) -> ApplyResult:
             ingest_id = ingest_mod.create_event(conn, "purchase", label=label, source_path=label, mode="purchase",
                                                 at=p["ordered_at"], notes=f"{STORES[p['store']]} order {p['store_order_id']}")
             conn.execute("UPDATE purchases SET ingest_id = ? WHERE purchase_id = ?", (ingest_id, purchase_id))
-        moved = ingest_mod.reattribute(conn, to_ingest_id=ingest_id, needs=needs, sources=sources) if needs else 0
-        if moved != sum(needs.values()):
-            raise RuntimeError("could not match every requested copy; nothing was changed")
-        added = 0
-        db.require_cards(conn, [lines[d.line_no]["scryfall_id"] for d in decisions if d.add])
-        for d in decisions:
-            ln = lines[d.line_no]
-            if d.add:
-                inventory_mod.inventory_add(ln["scryfall_id"], ln["finish"], d.add, conn=conn, ingest_id=ingest_id)
-                added += d.add
-            conn.execute("UPDATE purchase_lines SET matched = matched + ?, added = added + ? WHERE line_id = ?",
-                         (d.match, d.add, ln["line_id"]))
+        db.require_cards(conn, sids)
+        given: dict[tuple[str, str], int] = {}
+        for ln, n in todo:
+            inventory_mod.inventory_add(ln["scryfall_id"], ln["finish"], n, conn=conn, ingest_id=ingest_id)
+            conn.execute("UPDATE purchase_lines SET added = added + ? WHERE line_id = ?", (n, ln["line_id"]))
+            k = (ln["scryfall_id"], ln["finish"])
+            given[k] = given.get(k, 0) + n
         n_rows = conn.execute("SELECT COUNT(*) FROM (SELECT 1 FROM inventory_events WHERE ingest_id = ? "
                               "GROUP BY scryfall_id, finish)", (ingest_id,)).fetchone()[0]
         ingest_mod.finalize_event(conn, ingest_id, rows_added=n_rows)
         drift = ingest_mod.reconcile_inventory_ledger(conn)
         if drift:
-            raise RuntimeError(f"ledger drift after applying the order ({len(drift)} rows); rolled back")
-        # The order must hold exactly what it was just given, taken from no other order.
-        keys = {(ln["scryfall_id"], ln["finish"]) for ln in lines.values() if ln["scryfall_id"]}
-        held = _held(conn, {k[0] for k in keys})
-        given = {k: needs.get(k, 0) for k in keys}
-        for d in decisions:
-            if d.add:
-                k = (lines[d.line_no]["scryfall_id"], lines[d.line_no]["finish"])
-                given[k] += d.add
-        purchase_ids = {r[0] for r in conn.execute("SELECT ingest_id FROM ingest_events WHERE method = 'purchase'")}
-        for (iid, sid, fin), n in held.items():
-            before = held_before.get((iid, sid, fin), 0)
-            mine = iid == ingest_id and n != before + given.get((sid, fin), 0)
-            if mine or (iid in purchase_ids and iid != ingest_id and n < before):
-                raise RuntimeError("the order would not hold exactly the copies assigned to it; rolled back")
-    return ApplyResult(purchase_id, ingest_id, moved, added)
+            raise RuntimeError(f"ledger drift after adding the order ({len(drift)} rows); rolled back")
+        held = _held(conn, sids)
+        for (sid, fin), n in given.items():
+            if held.get((ingest_id, sid, fin), 0) != held_before.get((ingest_id, sid, fin), 0) + n:
+                raise RuntimeError("the order would not hold exactly the copies added to it; rolled back")
+    return ApplyResult(purchase_id, ingest_id, sum(n for _ln, n in todo))
+
+
+# ---------- totals (paid vs. what the collection is worth) ----------
+
+@dataclass
+class Totals:
+    orders: int
+    paid_usd: float            # item prices × quantity, every line of every order
+    singles_paid_usd: float
+    sealed_paid_usd: float
+    other_paid_usd: float
+    collection_value_usd: float   # today's value of your WHOLE inventory (local prices)
+    collection_unpriced: int      # inventory rows with no USD price (not in the value)
+    gain_usd: float               # collection_value_usd - paid_usd
+
+
+def totals() -> Totals:
+    """Everything paid across all orders vs. what the whole collection is worth
+    today — a rough return estimate. Copies aren't tied to orders, so this is the
+    only honest comparison. The value is :func:`inventory.inventory_value` (the
+    same local-first price math as ``mm inventory value``)."""
+    paid = {"single": 0, "sealed": 0, "other": 0}
+    with db.connect() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM purchases").fetchone()[0]
+        for kind, cents in conn.execute(
+                "SELECT kind, SUM(COALESCE(unit_price_cents, 0) * quantity) FROM purchase_lines GROUP BY kind"):
+            paid[kind if kind in paid else "other"] += cents or 0
+    v = inventory_mod.inventory_value()
+    total_paid = round(sum(paid.values()) / 100, 2)
+    value = round(v["total"], 2)
+    return Totals(orders=n, paid_usd=total_paid, singles_paid_usd=round(paid["single"] / 100, 2),
+                  sealed_paid_usd=round(paid["sealed"] / 100, 2), other_paid_usd=round(paid["other"] / 100, 2),
+                  collection_value_usd=value, collection_unpriced=len(v["missing_price"]),
+                  gain_usd=round(value - total_paid, 2))
 
 
 def forget(purchase_id: int) -> None:

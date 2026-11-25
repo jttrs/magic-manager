@@ -3,10 +3,10 @@ import { expect, fixtures, test } from './support';
 const detail = fixtures.deckDetail;
 const DECK_URL = `/decks?deck=${encodeURIComponent(detail.deck.slug)}`;
 
-// Untouched, the list shows the default deck type (Commander) of what you own.
-const owned = fixtures.recipes.recipes.filter((r) => r.ownership !== 'none' && r.deck_type === 'Commander');
+// Untouched, the list shows the default deck type (Commander) of the default status (Built).
+const owned = fixtures.recipes.recipes.filter((r) => r.ownership === 'built' && r.deck_type === 'Commander');
 
-test('recipe list shows what you own by default; status, source, deck type and text filter it; the rail is Find → Show', async ({ page }) => {
+test('recipe list shows your built decks by default; status, source, deck type and text filter it; the rail is Find → Show', async ({ page }) => {
   await page.goto('/decks');
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
@@ -17,8 +17,9 @@ test('recipe list shows what you own by default; status, source, deck type and t
   await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show']);
   await expect(rail.getByRole('searchbox').first()).toHaveAccessibleName('Deck, set or author');
 
-  await page.getByRole('button', { name: /^Recipes/ }).click();
-  await expect(page).toHaveURL(/own=/);
+  await page.getByRole('button', { name: /^Buildable/ }).click();
+  await page.getByRole('button', { name: /^Unbuilt/ }).click();
+  await expect(page).toHaveURL(/status=/);
   await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.deck_type === 'Commander').length);
   // Deck type starts at Commander; adding Jumpstart shows the packs too.
   await page.getByRole('button', { name: /^Deck type/ }).click();
@@ -56,7 +57,8 @@ test('recipe list shows what you own by default; status, source, deck type and t
 
 test('old built-only links keep showing only built recipes', async ({ page }) => {
   await page.goto('/decks?built=true');
-  await expect(page).toHaveURL(/own=/);
+  // Built is the default status, so it is no longer written to the URL.
+  await expect(page).toHaveURL(/\/decks$/);
   await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.ownership === 'built' && r.deck_type === 'Commander').length);
 });
 
@@ -127,7 +129,7 @@ test('deck list is one tab stop with arrow-key navigation', async ({ page }) => 
 });
 
 test('one row per recipe: built copies and loose copies are marked', async ({ page }) => {
-  await page.goto('/decks?types=%5B%22all%22%5D');
+  await page.goto('/decks?status=built,buildable,unbuilt&types=%5B%22all%22%5D');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
   const d = fixtures.recipes.recipes.find((x) => x.name === 'Avengers Assemble')!;
   await expect(list.getByRole('button', { name: /Avengers Assemble/ })).toContainText(`×${d.built} built`);
@@ -247,7 +249,7 @@ test('import dialog: reopening and ticking "I have these cards" never re-imports
 
 test('editor: card names open the inspector; checks show legality and the bracket floor', async ({ page }) => {
   await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: editable }));
-  await page.route('**/api/cards/*/holdings', (r) => r.fulfill({ json: { scryfall_id: 'x', owned: {}, pledged: {}, free: {}, decks: [], sources: [], other_printings_owned: 0 } }));
+  await page.route('**/api/cards/*/holdings', (r) => r.fulfill({ json: { scryfall_id: 'x', owned: {}, pledged: {}, free: {}, decks: [], other_printings_owned: 0 } }));
   await page.route('**/api/decks/*/check', (r) => r.fulfill({ json: {
     format: 'commander',
     legality: { format: 'commander', legal: false, checked_count: 40, violations: [{ code: 'deck_size', severity: 'error', message: 'Deck has 40 cards; Commander needs exactly 100.', cards: [] }] },
@@ -267,7 +269,7 @@ test('editor: card names open the inspector; checks show legality and the bracke
 });
 
 test('an old kinds=jumpstart link opens Jumpstart as a deck type', async ({ page }) => {
-  await page.goto('/decks?kinds=%5B%22jumpstart%22%5D&own=%5B%22built%22%2C%22loose%22%2C%22none%22%5D');
+  await page.goto('/decks?kinds=%5B%22jumpstart%22%5D&status=built,buildable,unbuilt');
   await expect(page.getByRole('button', { name: /^Deck type/ })).toContainText('Jumpstart');
   await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button', { name: /^Counterargument/ })).toBeVisible();
 });

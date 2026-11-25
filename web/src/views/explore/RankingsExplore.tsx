@@ -146,7 +146,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
 
   const shown = ranking.data?.rows.length ?? 0;
   const footer = r && r.total > shown ? (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-5 pt-2 pb-8">
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-sheet pt-2 pb-8">
       <p className="text-sm tabular text-ink-muted">Showing {fmtInt(shown)} of {fmtInt(r.total)}</p>
       <Button tone="paper" disabled={ranking.isFetching} onClick={() => setMore({ key: pageKey, limit: limit + nextPage(shown, r.total) })}>
         {ranking.isFetching ? 'Loading…' : `Load ${fmtInt(nextPage(shown, r.total))} more`}
@@ -165,7 +165,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
     body = live?.status === 'failed' ? (
       <ErrorNote error={new Error(`Couldn’t read this ranking. ${failureText(live.error)}`)} onRetry={() => fetchRanking(false)} />
     ) : (
-      <div className="mx-5 flex flex-col gap-3 pt-2">
+      <div className="mx-sheet flex flex-col gap-3 pt-2">
         <ProgressRule label="Reading the ranking" verb="Reading" done={live?.done ?? 0} total={live?.total ?? null} message={live?.log.at(-1)?.msg ?? 'EDHREC'} />
         <p className="text-sm text-ink-muted">First time for this list — fetching it from EDHREC. Next time it opens instantly.</p>
       </div>
@@ -213,15 +213,15 @@ export function RankingsExplore({ search, set, subnav }: Props) {
         <div className={`flex h-full min-h-0 flex-col transition-opacity duration-150 ease-guide ${dim ? 'opacity-60' : ''}`}>
           <EdhrecHealth keys={RANKING_HEALTH} />
           {r && running && (
-            <div className="mx-5 mb-2">
+            <div className="mx-sheet mb-2">
               <ProgressRule label="Refreshing the ranking" verb="Reading" done={live?.done ?? 0} total={live?.total ?? null} message={live?.log.at(-1)?.msg} />
             </div>
           )}
           {r && !running && partialRankingNote(r) && (
-            <p role="status" className="mx-5 mb-2 text-sm text-ink-muted">{partialRankingNote(r)}</p>
+            <p role="status" className="mx-sheet mb-2 text-sm text-ink-muted">{partialRankingNote(r)}</p>
           )}
           {r && live?.status === 'failed' && (
-            <p role="alert" className="mx-5 mb-2 text-sm text-danger">Couldn’t refresh: {failureText(live.error)} Showing the copy from {ago}.</p>
+            <p role="alert" className="mx-sheet mb-2 text-sm text-danger">Couldn’t refresh: {failureText(live.error)} Showing the copy from {ago}.</p>
           )}
           <div className="min-h-0 flex-1">{body}</div>
         </div>
@@ -266,7 +266,7 @@ function RankingList({ r, rows, cards, selected, onToggle, onInspect, footer }: 
   const scope = r.scope as RankScope;
   const role = roleFor(scope);
   return (
-    <div className="@container h-full overflow-y-auto px-3 pb-6 sm:px-5" role="region" aria-label={r.title} tabIndex={0}>
+    <div className="@container h-full overflow-y-auto px-sheet pb-6" role="region" aria-label={r.title} tabIndex={0}>
       <table className="w-full table-fixed border-collapse text-sm tabular">
         <caption className="sr-only">{r.title}: rank, card, card type, creature type, color identity, mana cost, {metricLabel(scope).toLowerCase()}, cheapest price, copies you own</caption>
         <thead className="sticky top-0 z-10 bg-paper">

@@ -15,14 +15,14 @@ type Props = {
 
 /**
  * The ruled head of a group in a scrolling list. Its paper band runs to the edges
- * of the list's `px-4` scroll region (so rows scroll under it with no visible box
+ * of the list's `px-sheet` scroll region (so rows scroll under it with no visible box
  * edge), and its text sits in from that edge, aligned with the rows' content.
  */
 export function GroupHead({ label, meta, tone = 'muted', as: Tag = 'h2', id, sticky = true }: Props) {
   return (
     <Tag
       id={id}
-      className={`${sticky ? 'sticky top-0 z-10' : ''} -mx-4 flex items-baseline gap-2 border-b bg-paper px-5 pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] ${
+      className={`${sticky ? 'sticky top-0 z-10' : ''} -mx-sheet flex items-baseline gap-2 border-b bg-paper px-sheet pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] ${
         tone === 'accent' ? 'border-rule-strong text-accent-ink' : 'border-rule text-ink-muted'
       }`}
     >

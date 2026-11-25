@@ -24,8 +24,7 @@ export type LegacyJumpstartSearch = z.infer<typeof legacyJumpstartSearch>;
 export function jumpstartToDecks(s: LegacyJumpstartSearch): Partial<DecksSearch> {
   return {
     types: ['Jumpstart'],
-    own: s.show === 'own' ? ['built', 'loose'] : ['built', 'loose', 'none'],
-    cover: s.show === 'build' ? 'build' : s.show === 'close' ? 'close' : 'any',
+    status: s.show === 'build' || s.show === 'close' ? ['buildable'] : s.show === 'own' ? ['built'] : ['built', 'buildable', 'unbuilt'],
     sets: s.set ? [s.set] : [],
     deck: s.pack ? `fn:${s.pack}` : undefined,
     group: 'color',
@@ -35,12 +34,12 @@ export function jumpstartToDecks(s: LegacyJumpstartSearch): Partial<DecksSearch>
   };
 }
 
-/** The Buy strip's label line for the chosen shopping list. */
-export function shopLead(shop: Shop, d: Pick<JumpstartOut, 'buildable' | 'whole' | 'whole_packs'>): string {
+/** What the chosen shopping list holds, for the copy confirmation. */
+export function shopDescribe(shop: Shop, d: Pick<JumpstartOut, 'buildable' | 'whole' | 'whole_packs'>): string {
   if (shop === 'buildable') {
     const b = d.buildable;
-    return b && b.copies ? `Copy bulk lists · ${fmtCount(b.copies, 'card')} to build every theme · ≈ ${fmtUsd(b.usd)} at market` : 'Every theme is buildable from cards you own';
+    return b && b.copies ? `${fmtCount(b.copies, 'card')} to build every theme · ≈ ${fmtUsd(b.usd)} at market` : 'Every theme is buildable from cards you own';
   }
   const w = d.whole;
-  return w && d.whole_packs ? `Copy bulk lists · ${fmtCount(d.whole_packs, 'pack')} you don’t own · ${fmtCount(w.copies, 'card')} · ≈ ${fmtUsd(w.usd)} at market` : 'You own every pack version';
+  return w && d.whole_packs ? `${fmtCount(d.whole_packs, 'pack')} you don’t own · ${fmtCount(w.copies, 'card')} · ≈ ${fmtUsd(w.usd)} at market` : 'You own every pack version';
 }

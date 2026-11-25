@@ -809,8 +809,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.post("/api/purchases/{purchase_id}/apply", response_model=purchases_api.ApplyOut, tags=["purchases"],
               dependencies=[write("before adding an order to your collection")])
-    def purchase_apply(purchase_id: int, req: purchases_api.ApplyIn):
-        return _purchases(lambda: purchases_api.apply(purchase_id, req))
+    def purchase_apply(purchase_id: int):
+        return _purchases(lambda: purchases_api.apply(purchase_id))
 
     @app.delete("/api/purchases/{purchase_id}", status_code=204, tags=["purchases"],
                 dependencies=[write("before forgetting an order")])

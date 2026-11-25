@@ -11,16 +11,17 @@ import { IconAction } from '../components/IconAction';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
 import { ProgressRule } from '../components/ProgressRule';
-import { ChipToggles, Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
 import { ImportDeckMark, NewDeckMark, RereadMark } from '../components/StoreMarks';
 import { jumpstartBuyList } from '../core/api';
-import { COVER_LABEL, DECK_GROUP_LABEL, DECK_GROUPS, effectiveTypes, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, typesToSearch, unreadInSet, type Cover, type DeckGroupBy, type Ownership } from '../core/decks';
+import { DECK_GROUP_LABEL, DECK_GROUPS, effectiveTypes, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, typesToSearch, unreadCount, unreadInSet, type DeckGroupBy } from '../core/decks';
 import { fmtCount, fmtInt } from '../core/format';
-import { shopLead, type Shop } from '../core/jumpstart';
-import { COVER, type DecksSearch } from '../core/search';
+import { shopDescribe, type Shop } from '../core/jumpstart';
+import { DECK_STATUS, type DecksSearch, type DeckStatus } from '../core/search';
+import { useBuildableShort, useDecksSettings } from '../app/deckPrefs';
 import { DeckInspector } from './decks/DeckInspector';
 import { ImportDeckDialog } from './decks/ImportDeckDialog';
 import { NewDeckDialog } from './decks/NewDeckDialog';
@@ -42,11 +43,14 @@ export function DecksView() {
   const narrow = useMediaQuery('(max-width: 47.99rem)');
 
   const all = useMemo(() => recipes.data?.recipes ?? [], [recipes.data]);
-  const { q, origins, own, cover, types, sets } = search;
-  const filters = useMemo(() => ({ q, origins, own, cover, types, sets }), [q, origins, own, cover, types, sets]);
-  const shown = useMemo(() => filterRecipes(all, filters), [all, filters]);
-  const counts = useMemo(() => optionCounts(all, filters), [all, filters]);
-  const groups = useMemo(() => groupRecipes(shown, search.group), [shown, search.group]);
+  const threshold = useBuildableShort();
+  useDecksSettings();
+  const { q, origins, status, types, sets } = search;
+  const filters = useMemo(() => ({ q, origins, status, types, sets }), [q, origins, status, types, sets]);
+  const shown = useMemo(() => filterRecipes(all, filters, threshold), [all, filters, threshold]);
+  const counts = useMemo(() => optionCounts(all, filters, threshold), [all, filters, threshold]);
+  const groups = useMemo(() => groupRecipes(shown, search.group, threshold), [shown, search.group, threshold]);
+  const unreadShown = useMemo(() => unreadCount(filterRecipes(all, { ...filters, status: [...DECK_STATUS] }, threshold)), [all, filters, threshold]);
 
   // The open recipe: a deck's slug (any copy) or `fn:<fileName>` — a catalog recipe resolves to
   // your deck once you own it, so adding a pack keeps it open.
@@ -81,13 +85,20 @@ export function DecksView() {
         <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, Angels, fic…" onChange={(q) => set({ q })} />
       </SideSection>
       <SideSection title="Show" quiet>
-        <ChipToggles<Ownership>
-          label="Status"
-          showLabel
-          value={search.own}
-          onChange={(own) => set({ own })}
-          options={counts.own.map((o) => ({ value: o.value, label: o.label, count: o.count }))}
-        />
+        <div className="flex flex-col gap-1.5">
+          <span className="flex items-center gap-1 text-sm voice-semi text-on-chrome-muted">
+            Decklist status
+            <InfoTip label="What do the statuses mean?">
+              <b>Built</b>: you have an assembled copy. <b>Buildable</b>: not built, and your unused cards cover it — or leave it at most {fmtCount(threshold, 'card')} short (change that in Settings → Decks). <b>Unbuilt</b>: everything else, including recipes not read yet.
+            </InfoTip>
+          </span>
+          <ChipToggles<DeckStatus>
+            label="Decklist status"
+            value={search.status}
+            onChange={(status) => set({ status })}
+            options={counts.status.map((o) => ({ value: o.value as DeckStatus, label: o.label, count: o.count }))}
+          />
+        </div>
         <MultiSelect
           label="Source"
           noun="sources"
@@ -115,12 +126,6 @@ export function DecksView() {
           onChange={(sets) => set({ sets })}
           options={counts.sets}
         />
-        <SelectField<Cover>
-          label="Unused cards"
-          value={search.cover}
-          onChange={(cover) => set({ cover })}
-          options={COVER.map((c) => ({ value: c, label: COVER_LABEL[c], count: counts.cover[c] ?? undefined }))}
-        />
       </SideSection>
       {jsSet && <JumpstartBuy code={jsSet} shop={search.shop} onShop={(shop) => set({ shop })} />}
     </>
@@ -131,15 +136,15 @@ export function DecksView() {
   else if (recipes.isError) body = <ErrorNote error={recipes.error} onRetry={() => recipes.refetch()} />;
   else if (!all.length) body = <EmptyNote title="No deck recipes">MTGJSON lists no precons yet, and you have no decks. Import one from a link or start a new deck.</EmptyNote>;
   else {
-    const list = <RecipeList groups={groups} total={shown.length} active={openRow?.key ?? search.deck} onPick={(deck) => set({ deck })} />;
+    const list = <RecipeList groups={groups} total={shown.length} active={openRow?.key ?? search.deck} threshold={threshold} onPick={(deck) => set({ deck })} />;
     const back = narrow ? () => set({ deck: undefined }) : undefined;
     const onView = narrow ? (view: 'grid' | 'list') => set({ view }) : undefined;
     const inspector = !search.deck ? (
       <EmptyNote title="Pick a recipe">Choose a deck or pack on the left to see its cards — which you have unused, and which you’d still need.</EmptyNote>
     ) : openRow?.slug ? (
-      <DeckInspector key={openRow.slug} slug={openRow.slug} recipe={openRow} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} onMarked={setMarked} />
+      <DeckInspector key={openRow.slug} slug={openRow.slug} recipe={openRow} threshold={threshold} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} onMarked={setMarked} />
     ) : fn ? (
-      <RecipeInspector key={fn} fileName={fn} view={search.view} closeShort={recipes.data.close_short ?? 3} onView={onView} onBack={back} onMarked={setMarked} />
+      <RecipeInspector key={fn} fileName={fn} view={search.view} closeShort={threshold} onView={onView} onBack={back} onMarked={setMarked} />
     ) : (
       <DeckInspector key={search.deck} slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} onMarked={setMarked} />
     );
@@ -151,7 +156,10 @@ export function DecksView() {
   ) : readError ? (
     <span role="alert" className="text-danger">{readError}</span>
   ) : recipes.data ? (
-    recipeSummary(shown)
+    <>
+      {recipeSummary(shown, threshold)}
+      {search.status.includes('buildable') && unreadShown > 0 && ` · ${fmtCount(unreadShown, 'recipe')} not read yet — they count as Unbuilt until read${oneSet ? ' (use the read icon above)' : ''}`}
+    </>
   ) : undefined;
 
   return (
@@ -212,7 +220,7 @@ function JumpstartBuy({ code, shop, onShop }: { code: string; shop: Shop; onShop
         options={[{ value: 'buildable', label: 'Every theme' }, { value: 'packs', label: 'Packs I don’t own' }]}
       />
       {q.data?.ready ? (
-        <CopyTargets lead={shopLead(shop, q.data)} targets={buyListTargets(buyText)} />
+        <CopyTargets describe={() => shopDescribe(shop, q.data)} targets={buyListTargets(buyText)} />
       ) : q.data ? (
         <p className="text-sm text-on-chrome-muted">Read the set’s packs first (the read icon above the list).</p>
       ) : q.isError ? (

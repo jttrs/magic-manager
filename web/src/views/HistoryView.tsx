@@ -119,7 +119,7 @@ export function HistoryView() {
     ) : (
       <EmptyNote title={review.length ? 'Pick an entry or an order' : 'Pick an entry'}>
         {review.length
-          ? 'Choose an order under Needs review to match it to cards you own or add it, or an entry to see the exact cards it brought in.'
+          ? 'Choose an order under Needs review to see what you paid and add its cards, or an entry to see the exact cards it brought in.'
           : 'Choose an entry to see the exact cards it brought in and what they are worth today.'}
       </EmptyNote>
     );
@@ -128,7 +128,7 @@ export function HistoryView() {
   }
 
   const held = useMemo(() => [...shown, ...pending].filter((e) => e.kind !== 'move').reduce((t, e) => t + e.value_usd, 0), [shown, pending]);
-  const orderTotals = purchasesOn && orders.data?.purchases.length ? orders.data : null;
+  const orderTotals = purchasesOn && orders.data?.purchases.length ? orders.data.totals : null;
   return (
     <ViewLayout label="History controls" summary={filtered ? `${fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
@@ -175,7 +175,7 @@ function Timeline({ review, groups, total, orderOf, active, onEntry, onOrder }: 
   if (!total) return <EmptyNote title="No entries match">Clear the search, widen the dates, or show more kinds.</EmptyNote>;
   const paid = review.reduce((t, p) => t + p.paid_usd, 0);
   return (
-    <nav ref={navRef} aria-label="Purchase history" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
+    <nav ref={navRef} aria-label="Purchase history" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-sheet pb-6 [scrollbar-gutter:stable]">
       {review.length > 0 && (
         <section aria-labelledby="hm-review" className="mb-2">
           <GroupHead id="hm-review" tone="accent" label="Needs review" meta={`${fmtCount(review.length, 'order')} · paid ${fmtUsd(paid)}`} />
@@ -315,7 +315,7 @@ function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, 
 
   return (
     <section aria-labelledby="entry-h" className="flex h-full min-h-0 flex-col">
-      <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
+      <header className="mx-sheet flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
           <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
             <Chevron dir="left" className="size-3.5" /> Purchase history

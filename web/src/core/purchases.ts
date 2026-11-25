@@ -1,12 +1,10 @@
-// Store orders view-model: what each order's status says, and the per-line
-// "match what I own / add as new" decisions. Framework-free.
-import type { PurchaseOut, ReviewLineOut } from './api';
+// Store orders view-model: what each order's status says, what "Add to your collection" would add,
+// and the paid-vs-worth summary. Framework-free.
+import type { PurchaseOut, ReviewLineOut, TotalsOut } from './api';
 import type { OrderStore } from './companion';
 
 export type PurchaseStatus = PurchaseOut['status'];
 export type Store = OrderStore;
-export type Decision = { match: number; add: number };
-export type Decisions = Record<number, Decision>;
 
 export const STATUS_LABEL: Record<PurchaseStatus, string> = {
   new: 'Not added yet',
@@ -20,54 +18,17 @@ export function listStatus(orderId: string, store: Store, purchases: readonly Pu
   return purchases.find((p) => p.store === store && p.order_id === orderId)?.status ?? 'unread';
 }
 
-/** Only exact single-card lines with copies left can be matched or added. */
-export const isAssignable = (l: Pick<ReviewLineOut, 'kind' | 'printing' | 'remaining'>): boolean =>
+/** Only exact single-card lines with copies left are added to your collection. */
+export const isAddable = (l: Pick<ReviewLineOut, 'kind' | 'printing' | 'remaining'>): boolean =>
   l.kind === 'single' && l.printing != null && l.remaining > 0;
 
-const maxMatch = (l: ReviewLineOut) => Math.max(0, Math.min(l.remaining, l.matchable));
+/** How many cards "Add to your collection" would bring in: every addable line's remaining copies. */
+export const addableCopies = (lines: readonly ReviewLineOut[]): number =>
+  lines.reduce((n, l) => n + (isAddable(l) ? l.remaining : 0), 0);
 
-/** Fill every assignable line: match mode pairs the order with copies you own (nothing new);
- *  add mode brings the whole order in as new copies. */
-export function defaultDecisions(lines: readonly ReviewLineOut[], mode: 'match' | 'add'): Decisions {
-  const out: Decisions = {};
-  for (const l of lines) {
-    if (!isAssignable(l)) continue;
-    out[l.line_no] = mode === 'match' ? { match: maxMatch(l), add: 0 } : { match: 0, add: l.remaining };
-  }
-  return out;
-}
-
-const whole = (n: number) => (Number.isFinite(n) ? Math.floor(n) : 0);
-
-/** Keep a decision inside what the line allows: match ≤ min(remaining, matchable), add ≤ what is left after matching. */
-export function clampDecision(l: ReviewLineOut, d: Decision): Decision {
-  const match = Math.min(Math.max(0, whole(d.match)), maxMatch(l));
-  const add = Math.min(Math.max(0, whole(d.add)), Math.max(0, l.remaining - match));
-  return { match, add };
-}
-
-/** The request body for applying: lines with something to do. */
-export function decisionsBody(decisions: Decisions): { line_no: number; match: number; add: number }[] {
-  return Object.entries(decisions)
-    .map(([no, d]) => ({ line_no: Number(no), match: d.match, add: d.add }))
-    .filter((d) => d.match > 0 || d.add > 0)
-    .sort((a, b) => a.line_no - b.line_no);
-}
-
-/** Copies matched, copies added, and what was paid for them (unit price × copies). */
-export function decisionTotals(lines: readonly ReviewLineOut[], decisions: Decisions): { matched: number; added: number; paid: number } {
-  let matched = 0;
-  let added = 0;
-  let paid = 0;
-  for (const l of lines) {
-    const d = decisions[l.line_no];
-    if (!d) continue;
-    matched += d.match;
-    added += d.add;
-    paid += (d.match + d.add) * (l.unit_usd ?? 0);
-  }
-  return { matched, added, paid: Math.round(paid * 100) / 100 };
-}
+/** How many addable lines are for a printing you already own (adding counts those copies again). */
+export const addableOwnedLines = (lines: readonly Pick<ReviewLineOut, 'kind' | 'printing' | 'remaining' | 'owned'>[]): number =>
+  lines.filter((l) => isAddable(l) && l.owned > 0).length;
 
 /** Split into batches (the companion reads at most 100 orders per request). */
 export function chunk<T>(items: readonly T[], size: number): T[][] {
@@ -100,4 +61,14 @@ export function valuation(p: { paid_usd: number; compared_paid_usd: number; wort
   if (p.compared_paid_usd <= 0.005) return { kind: 'none' };
   if (p.compared_paid_usd < p.paid_usd - 0.005) return { kind: 'partial', worth: p.worth_usd, gain: p.gain_usd, comparedPaid: p.compared_paid_usd };
   return { kind: 'full', worth: p.worth_usd, gain: p.gain_usd };
+}
+
+/** The header line: everything paid vs. what the whole collection is worth now. Copies aren't tied to
+ *  orders, so this is a rough return — `gain` is signed ('+' only when positive). */
+export function roiSummary(t: Pick<TotalsOut, 'orders' | 'paid_usd' | 'collection_value_usd' | 'gain_usd'>): { paid: number; orders: number; value: number; sign: '+' | '−' | ''; gain: number; title: string } {
+  const { sign, abs } = signedParts(t.gain_usd);
+  return {
+    paid: t.paid_usd, orders: t.orders, value: t.collection_value_usd, sign, gain: abs,
+    title: 'Everything you paid for the items in your orders (before shipping and tax), against what your whole collection is worth at today’s prices. Cards aren’t tied to individual orders, so treat the difference as a rough estimate.',
+  };
 }

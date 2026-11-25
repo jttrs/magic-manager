@@ -11,7 +11,7 @@ import { ProgressRule } from '../../components/ProgressRule';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../../components/States';
 import { AddCardMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
-import { colorLabel, deckGuideGroups, isJumpstart, ownershipLabel } from '../../core/decks';
+import { colorLabel, deckGuideGroups, isJumpstart, ownershipLabel, readiness } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { SourceMark } from './RecipeList';
 import type { MarkedCopy } from '../../components/CopyMarked';
@@ -73,7 +73,7 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
 
   return (
     <section aria-labelledby="recipe-h" className="flex h-full min-h-0 flex-col">
-      <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
+      <header className="mx-sheet flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
           <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
             <Chevron dir="left" className="size-3.5" /> All recipes
@@ -106,7 +106,7 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
         </div>
         {ready && r.have != null && r.short != null && (
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular">
-            <Fact label="Unused cards cover" value={`${fmtInt(r.have)} of ${fmtInt(r.have + r.short)}`} strong={r.status === 'build'} />
+            <Fact label="Unused cards cover" value={`${fmtInt(r.have)} of ${fmtInt(r.have + r.short)}`} strong={readiness(r, closeShort) === 'ready'} />
             {r.short > 0 && <Fact label="Short" value={fmtCount(r.short, 'card')} />}
             <Fact label="You own" value={r.ownership === 'none' ? 'No copy' : ownershipLabel(r)} />
             <span className="inline-flex self-center">

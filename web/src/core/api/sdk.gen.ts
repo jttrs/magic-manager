@@ -783,14 +783,7 @@ export const purchaseReview = <ThrowOnError extends boolean = false>(options: Op
 /**
  * Purchase Apply
  */
-export const purchaseApply = <ThrowOnError extends boolean = false>(options: Options<PurchaseApplyData, ThrowOnError>): RequestResult<PurchaseApplyResponses, PurchaseApplyErrors, ThrowOnError> => (options.client ?? client).post<PurchaseApplyResponses, PurchaseApplyErrors, ThrowOnError>({
-    url: '/api/purchases/{purchase_id}/apply',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
+export const purchaseApply = <ThrowOnError extends boolean = false>(options: Options<PurchaseApplyData, ThrowOnError>): RequestResult<PurchaseApplyResponses, PurchaseApplyErrors, ThrowOnError> => (options.client ?? client).post<PurchaseApplyResponses, PurchaseApplyErrors, ThrowOnError>({ url: '/api/purchases/{purchase_id}/apply', ...options });
 
 /**
  * Jumpstart View

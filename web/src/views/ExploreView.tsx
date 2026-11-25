@@ -214,11 +214,11 @@ export function ExploreView() {
         <div className="flex h-full min-h-0 flex-col">
           {role === 'commander' && search.groupBy === 'function' && cmdView && (
             cmdView.tagged ? (
-              <p className="mx-4 mb-2 text-sm leading-relaxed text-ink-muted">
+              <p className="mx-sheet mb-2 text-sm leading-relaxed text-ink-muted">
                 Deck roles from Scryfall Tagger. A card with several roles is listed under each; column totals count it once.
               </p>
             ) : (
-              <p role="note" className="mx-4 mb-2 text-sm leading-relaxed text-ink-muted">
+              <p role="note" className="mx-sheet mb-2 text-sm leading-relaxed text-ink-muted">
                 No Scryfall function tags yet — run <Link to="/jobs" className="text-ink underline">Sync card and art tags</Link>, then reload.
               </p>
             )
@@ -276,7 +276,7 @@ function Plates({ r, role, onInspect }: { r: CardExploreOut; role: Role; onInspe
   const shown = combosFor && [r.a.name, r.b?.name].includes(combosFor) ? cleanName(combosFor) : null;
   const toggle = (name: string) => setCombosFor((c) => (c === name ? null : name));
   return (
-    <div className="mx-4 flex flex-col gap-3 border-b-2 border-rule-strong pb-3">
+    <div className="mx-sheet flex flex-col gap-3 border-b-2 border-rule-strong pb-3">
       <div className={`grid gap-4 ${r.b ? 'md:grid-cols-[1fr_auto_1fr]' : ''}`}>
         <Plate p={r.a} role={role} side={r.b ? 'A' : null} compact={Boolean(r.b)} onInspect={onInspect} combosOpen={combosFor === r.a.name} onCombos={() => toggle(r.a.name)} />
         {r.b && <span aria-hidden="true" className="hidden self-center text-2xl voice-condensed font-bold text-ink-muted md:block">vs</span>}

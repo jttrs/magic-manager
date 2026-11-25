@@ -71,10 +71,10 @@ export function AdminView() {
   } else if (q.error) {
     body = <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   } else if (!q.data) {
-    body = <p role="status" className="px-5 py-6 text-md text-ink-muted">Reading the people list…</p>;
+    body = <p role="status" className="px-sheet py-6 text-md text-ink-muted">Reading the people list…</p>;
   } else {
     const list = (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-sheet pb-6">
         <h2 className="border-b-2 border-rule-strong pb-1 text-2xl voice-condensed font-bold uppercase">People</h2>
         {shown.length ? (
           <ul aria-label="People">

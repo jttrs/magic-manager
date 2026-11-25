@@ -1,5 +1,5 @@
 // Store orders (purchases flag), merged into Purchase history: Needs review, totals, reading orders through the
-// companion (stood in for here), and matching an order's lines to cards you own.
+// companion (stood in for here), and adding an order's singles to your collection.
 import type { Page } from '@playwright/test';
 import history from './fixtures/history.json' with { type: 'json' };
 import { expect, test } from './support';
@@ -19,13 +19,14 @@ const PURCHASES = {
     ORDER({ purchase_id: 2, order_id: 'MP-222', status: 'partial', assigned: 1, paid_usd: 20, worth_usd: 15, compared_paid_usd: 20, gain_usd: -5, ordered_at: '2026-08-02' }),
   ],
   paid_usd: 30, compared_paid_usd: 30, worth_usd: 27.5, gain_usd: -2.5,
+  totals: { orders: 2, paid_usd: 30, singles_paid_usd: 30, sealed_paid_usd: 0, other_paid_usd: 0, collection_value_usd: 45.5, collection_unpriced: 0, gain_usd: 15.5 },
 };
 const PRINTING = { scryfall_id: '8d8432a7-1c8a-4cfb-947c-ecf9791063eb', oracle_id: null, name: 'Sol Ring', set_code: 'cmm', set_name: 'Commander Masters', collector_number: '400', rarity: 'uncommon' };
 const REVIEW = {
   purchase: { ...PURCHASES.purchases[0], shipping_usd: 1.25, tax_usd: 0.5, total_usd: 11.75, subtotal_usd: 9.5 },
   lines: [
-    { line_no: 1, kind: 'single', name: 'Sol Ring', set_name: 'Commander Masters', condition: 'NM', finish: 'nonfoil', printing: PRINTING, quantity: 3, unit_usd: 2, today_usd: 3, matched: 0, added: 0, remaining: 3, owned: 2, matchable: 2 },
-    { line_no: 2, kind: 'sealed', name: 'Bloomburrow Play Booster Box', set_name: null, condition: null, finish: 'nonfoil', printing: null, quantity: 1, unit_usd: 4, today_usd: null, matched: 0, added: 0, remaining: 1, owned: 0, matchable: 0 },
+    { line_no: 1, kind: 'single', name: 'Sol Ring', set_name: 'Commander Masters', condition: 'NM', finish: 'nonfoil', printing: PRINTING, quantity: 3, unit_usd: 2, today_usd: 3, matched: 0, added: 0, remaining: 3, owned: 2 },
+    { line_no: 2, kind: 'sealed', name: 'Bloomburrow Play Booster Box', set_name: null, condition: null, finish: 'nonfoil', printing: null, quantity: 1, unit_usd: 4, today_usd: null, matched: 0, added: 0, remaining: 1, owned: 0 },
   ],
 };
 
@@ -35,7 +36,7 @@ async function flags(page: Page, f: Record<string, boolean>) {
 
 /** The purchases API, recording what the app posts. */
 async function purchasesApi(page: Page) {
-  const posted: { orders?: unknown; apply?: unknown } = {};
+  const posted: { orders?: unknown; apply?: boolean } = {};
   await page.route('**/api/history', (r) => r.fulfill({ json: history }));
   await page.route((u) => u.pathname.startsWith('/api/purchases'), (r) => {
     const { pathname } = new URL(r.request().url());
@@ -47,8 +48,8 @@ async function purchasesApi(page: Page) {
     }
     if (pathname === '/api/purchases') return r.fulfill({ json: PURCHASES });
     if (pathname === '/api/purchases/1/apply') {
-      posted.apply = r.request().postDataJSON();
-      return r.fulfill({ json: { purchase_id: 1, ingest_id: 9, matched: 2, added: 0 } });
+      posted.apply = true;
+      return r.fulfill({ json: { purchase_id: 1, ingest_id: 9, added: 3 } });
     }
     if (pathname === '/api/purchases/1') return r.fulfill({ json: REVIEW });
     return r.fulfill({ status: 404, json: { detail: 'unmocked' } });
@@ -82,7 +83,7 @@ test('one Purchase history: undecided orders pinned under Needs review, totals i
   const tabs = page.getByRole('navigation', { name: 'Collection views' });
   await expect(tabs.getByRole('link')).toHaveText(['Cards', 'Purchase history']);
   await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toBeVisible();
-  await expect(page.getByText(/store orders paid \$30\.00 · worth \$27\.50 \(−\$2\.50\)/)).toBeVisible();
+  await expect(page.getByText(/Paid \$30\.00 across 2 orders · collection worth \$45\.50 now · \+\$15\.50/)).toBeVisible();
   const list = page.getByRole('navigation', { name: 'Purchase history' });
   await expect(list.getByRole('heading', { level: 2 }).first()).toContainText('Needs review');
   const review = list.getByRole('region', { name: /Needs review/ });
@@ -146,21 +147,18 @@ test('reading orders: list, already-read marked, the chosen ones are read and sa
   expect(asked).toEqual([{ kind: 'order_list', params: { store: 'manapool' } }, { kind: 'orders', params: { store: 'manapool', ids: ['MP-333'] } }]);
 });
 
-test('reviewing an order: match to cards I own fills the boxes, Save posts them', async ({ page }) => {
+test('reviewing an order: lines are read-only, one button adds every single', async ({ page }) => {
   await flags(page, { purchases: true });
   const posted = await purchasesApi(page);
   await page.goto('/collection/history?order=1');
   await expect(page.getByRole('heading', { level: 2, name: /Mana Pool order #MP-111/ })).toBeVisible();
   await expect(page.getByText('Store subtotal')).toBeVisible();
   await expect(page.getByText(/subtotal is \$9\.50/)).toBeVisible();
-  await expect(page.getByText('Recorded only — not added to your collection')).toBeVisible();
-  await page.getByRole('button', { name: 'Match to cards I own' }).click();
-  await expect(page.getByRole('spinbutton', { name: 'Match Sol Ring' })).toHaveValue('2');
-  await expect(page.getByRole('spinbutton', { name: 'Add Sol Ring' })).toHaveValue('0');
-  await expect(page.getByText('Matches 2 copies you own, adds 0 new')).toBeVisible();
-  await page.getByRole('button', { name: 'Save to collection' }).click();
-  await expect(page.getByText('Saved: matched 2 copies, added 0 new.')).toBeVisible();
-  expect(posted.apply).toEqual({ lines: [{ line_no: 1, match: 2, add: 0 }] });
+  await expect(page.getByText('Sealed product — recorded only, not added as a card')).toBeVisible();
+  await expect(page.getByRole('spinbutton')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add 3 cards to your collection' }).click();
+  await expect(page.getByText('Added 3 cards to your collection.')).toBeVisible();
+  expect(posted.apply).toBe(true);
 });
 
 test('an applied order shows once: its ledger entry carries the order, and Review order opens it in place', async ({ page }) => {

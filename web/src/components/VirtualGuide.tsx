@@ -122,7 +122,7 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
   return (
     <>
     <CardInspector card={inspecting} onClose={() => setInspecting(null)} />
-    <div ref={setRegion} role="region" aria-label={label} tabIndex={0} className="@container h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 focus-visible:outline-offset-[-2px]">
+    <div ref={setRegion} role="region" aria-label={label} tabIndex={0} className="@container h-full min-h-0 overflow-y-auto overscroll-contain px-sheet pb-6 focus-visible:outline-offset-[-2px]">
       <div className="relative w-full" style={{ height: virt.getTotalSize() }}>
         {virt.getVirtualItems().map((vi) => {
           const row = rows[vi.index];

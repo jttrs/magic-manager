@@ -97,3 +97,5 @@ export { expect };
 
 export const COMPARE_URL = '/explore?a=Tifa%20Lockhart&b=Cloud%2C%20Ex-SOLDIER&role=commander';
 export const COLLECTION_URL = '/collection?families=%5B%22blb%22%5D';
+/** Every printing: owned and missing (Collection shows owned only by default). */
+export const COLLECTION_ALL_URL = `${COLLECTION_URL}&show=owned%2Cmissing`;

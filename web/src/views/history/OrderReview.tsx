@@ -9,7 +9,7 @@ import { FailureNote } from '../../components/companion/CompanionNotes';
 import { GridSkeleton, ErrorNote } from '../../components/States';
 import { purchaseApply, purchaseForget, type ReviewLineOut } from '../../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
-import { clampDecision, decisionsBody, decisionTotals, defaultDecisions, isAssignable, STATUS_LABEL, subtotalGap, type Decision, type Decisions } from '../../core/purchases';
+import { addableCopies, addableOwnedLines, STATUS_LABEL, subtotalGap } from '../../core/purchases';
 import { Valued } from './OrderRow';
 import { VerificationMark } from './StoreVerification';
 
@@ -19,23 +19,21 @@ const orderDate = (at: string) => {
   return Number.isNaN(d.getTime()) ? at.slice(0, 10) : FULL.format(d);
 };
 
-/** One store order: what you paid, what it is worth, and — line by line — which copies you already own
- *  (match) and which are new (add). Nothing changes until "Save to collection". */
+/** One store order: what you paid and what it is worth, its lines read-only, and one button that adds
+ *  every single card of the order to your collection. Nothing changes until you press it. */
 export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { purchaseId: number; onBack?: () => void; onForgotten: () => void; /** Opens the order's ledger entry (the cards it added so far). */ onOpenEntry?: (ingestId: number) => void }) {
   const on = useFeature('purchases');
   const q = useQuery(purchaseReviewQuery(purchaseId, on));
   const stores = useQuery(purchaseStoresQuery(on));
   const qc = useQueryClient();
-  const [decisions, setDecisions] = useState<Decisions>({});
   const [confirmForget, setConfirmForget] = useState(false);
-  const [saved, setSaved] = useState<{ matched: number; added: number } | null>(null);
+  const [saved, setSaved] = useState<{ added: number } | null>(null);
 
   const refresh = () => Promise.all(['purchases', 'history', 'collection', 'holdings', 'undo'].map((k) => qc.invalidateQueries({ queryKey: [k] })));
   const apply = useMutation({
-    mutationFn: async (body: ReturnType<typeof decisionsBody>) => unwrap(await purchaseApply({ path: { purchase_id: purchaseId }, body: { lines: body } })),
+    mutationFn: async () => unwrap(await purchaseApply({ path: { purchase_id: purchaseId } })),
     onSuccess: async (r) => {
-      setSaved({ matched: r.matched, added: r.added });
-      setDecisions({});
+      setSaved({ added: r.added });
       await refresh();
     },
   });
@@ -44,13 +42,8 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
   if (q.isError) return <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   const { purchase: p, lines } = q.data;
   const store = stores.data?.find((s) => s.key === p.store);
-  const totals = decisionTotals(lines, decisions);
-  const nothingChosen = totals.matched + totals.added === 0;
-  const setLine = (l: ReviewLineOut, patch: Partial<Decision>) => {
-    setSaved(null);
-    setDecisions((d) => ({ ...d, [l.line_no]: clampDecision(l, { ...(d[l.line_no] ?? { match: 0, add: 0 }), ...patch }) }));
-  };
-  const fill = (mode: 'match' | 'add') => { setSaved(null); apply.reset(); setDecisions(defaultDecisions(lines, mode)); };
+  const addable = addableCopies(lines);
+  const alreadyOwned = addableOwnedLines(lines);
 
   return (
     <section aria-labelledby="order-h" className="flex h-full min-h-0 flex-col">
@@ -90,36 +83,39 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
             The store’s item list adds up to {fmtUsd(p.paid_usd)}, but its subtotal is {fmtUsd(p.subtotal_usd)} — replacements or refunds aren’t priced exactly. Per-card prices are as the store lists them.
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Button tone="paper" onClick={() => fill('match')}>Match to cards I own</Button>
-          <Button tone="paper" onClick={() => fill('add')}>Add all as new</Button>
-          <span className="text-xs text-ink-muted">Fills the boxes below; change any line, then save.</span>
-        </div>
       </header>
 
       <div className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
         <div role="table" aria-label={`Lines of ${p.store_name} order ${p.order_id}`} className="tabular text-sm">
           <div role="row" aria-hidden="true" className={`${COLS} sticky top-0 z-10 hidden border-b border-rule-strong bg-paper py-1.5 text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted @[42rem]:grid`}>
-            <span>Card</span><span className="text-right">Qty</span><span className="text-right">Paid each</span><span className="text-right">Today each</span>
-            <span className="text-right">Owned</span><span className="text-right">Can match</span><span className="text-right">Match</span><span className="text-right">Add</span>
+            <span>Card</span><span className="text-right">Qty</span><span className="text-right">Paid each</span><span className="text-right">Worth today</span>
           </div>
           {lines.map((l) => (
-            <LineRow key={l.line_no} l={l} d={decisions[l.line_no]} onChange={(patch) => setLine(l, patch)} />
+            <LineRow key={l.line_no} l={l} />
           ))}
         </div>
       </div>
 
       <footer className="mx-4 flex flex-col gap-2 border-t border-rule py-3">
+        {alreadyOwned > 0 && addable > 0 && !saved && (
+          <p role="note" className="max-w-[70ch] text-sm text-ink">
+            You already own copies of {fmtInt(alreadyOwned)} of these cards. Adding counts them again — skip this if you entered them by hand.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-3">
-          <Button tone="paper" emphasis="primary" disabled={nothingChosen || apply.isPending} onClick={() => apply.mutate(decisionsBody(decisions))}>
-            {apply.isPending ? 'Saving…' : 'Save to collection'}
-          </Button>
+          {addable > 0 ? (
+            <Button tone="paper" emphasis="primary" disabled={apply.isPending} onClick={() => apply.mutate()}>
+              {apply.isPending ? 'Adding…' : `Add ${fmtCount(addable, 'card', 'cards')} to your collection`}
+            </Button>
+          ) : null}
           <p role="status" className="text-sm text-ink">
             {saved
-              ? `Saved: matched ${fmtCount(saved.matched, 'copy', 'copies')}, added ${fmtInt(saved.added)} new.`
-              : nothingChosen
-                ? 'Nothing chosen yet.'
-                : `Matches ${fmtCount(totals.matched, 'copy', 'copies')} you own, adds ${fmtInt(totals.added)} new · ${fmtUsd(totals.paid)} paid for them.`}
+              ? `Added ${fmtCount(saved.added, 'card', 'cards')} to your collection.`
+              : addable > 0
+                ? 'Adds every single card from this order that hasn’t been added yet.'
+                : p.assigned > 0
+                  ? 'In your collection.'
+                  : 'Recorded — sealed products aren’t added as cards.'}
           </p>
           {p.assigned === 0 && (
             <button type="button" onClick={() => setConfirmForget(true)} className="ml-auto cursor-pointer text-sm text-ink-muted underline hover:text-ink">
@@ -147,8 +143,9 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
   );
 }
 
-// Wide panes: one row of columns. Narrow panes: the card name, then its numbers and inputs beneath.
-const COLS = '@[42rem]:grid-cols-[minmax(0,1fr)_2.5rem_4.5rem_4.5rem_3rem_3.5rem_3.5rem_3.5rem] @[42rem]:gap-x-2';
+// Wide panes: one row of columns. Narrow panes: the card name, then its numbers beneath.
+const COLS = '@[42rem]:grid-cols-[minmax(0,1fr)_2.5rem_4.5rem_5rem] @[42rem]:gap-x-2';
+const KIND_NOTE = { single: null, sealed: 'Sealed product', other: 'Other item' } as const;
 
 function Cell({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
   return (
@@ -159,46 +156,22 @@ function Cell({ label, children, className = '' }: { label: string; children: Re
   );
 }
 
-function LineRow({ l, d, onChange }: { l: ReviewLineOut; d: Decision | undefined; onChange: (patch: Partial<Decision>) => void }) {
-  const assignable = isAssignable(l);
+function LineRow({ l }: { l: ReviewLineOut }) {
   const set = [l.printing ? l.printing.set_name ?? l.printing.set_code.toUpperCase() : l.set_name, l.finish === 'nonfoil' ? null : l.finish, l.condition].filter(Boolean).join(' · ');
-  const recordedOnly = l.kind !== 'single' || l.printing == null;
-  const already = l.matched + l.added > 0 ? `Matched ${fmtInt(l.matched)} · added ${fmtInt(l.added)}` : null;
+  const note = l.kind === 'single' ? (l.printing == null ? 'Single card — exact printing not found, recorded only' : null) : `${KIND_NOTE[l.kind]} — recorded only, not added as a card`;
+  const worth = l.today_usd == null ? null : l.today_usd * l.quantity;
   return (
-    <div role="row" className={`${COLS} ruled grid grid-cols-4 @[30rem]:grid-cols-7 items-start gap-x-3 gap-y-1.5 border-b border-rule py-2`}>
+    <div role="row" className={`${COLS} ruled grid grid-cols-3 items-start gap-x-3 gap-y-1.5 border-b border-rule py-2`}>
       <span role="cell" className="col-span-full min-w-0 @[42rem]:col-span-1">
         <span className="block text-md voice-semi font-medium text-ink">{l.name}</span>
-        <span className="block text-xs text-ink-muted">{set}</span>
-        {already && <span className="block text-xs text-ink-muted">{already}</span>}
-        {recordedOnly && <span className="block text-xs text-ink">Recorded only — not added to your collection</span>}
+        {set && <span className="block text-xs text-ink-muted">{set}</span>}
+        {note && <span className="block text-xs text-ink">{note}</span>}
+        {l.kind === 'single' && l.printing != null && l.owned > 0 && <span className="block text-xs text-ink-muted">you own {fmtInt(l.owned)}</span>}
       </span>
       <Cell label="Qty" className="text-ink">{fmtInt(l.quantity)}</Cell>
       <Cell label="Paid each" className="text-ink">{fmtUsd(l.unit_usd)}</Cell>
-      <Cell label="Today each" className="text-ink-muted">{fmtUsd(l.today_usd)}</Cell>
-      <Cell label="Owned" className="text-ink-muted">{fmtInt(l.owned)}</Cell>
-      <Cell label="Can match" className="text-ink-muted">{fmtInt(l.matchable)}</Cell>
-      {assignable ? (
-        <>
-          <Cell label="Match"><Count label={`Match ${l.name}`} value={d?.match ?? 0} max={Math.min(l.remaining, l.matchable)} onChange={(match) => onChange({ match })} /></Cell>
-          <Cell label="Add"><Count label={`Add ${l.name}`} value={d?.add ?? 0} max={l.remaining - (d?.match ?? 0)} onChange={(add) => onChange({ add })} /></Cell>
-        </>
-      ) : null}
+      <Cell label="Worth today" className="text-ink-muted">{fmtUsd(worth)}</Cell>
     </div>
-  );
-}
-
-function Count({ label, value, max, onChange }: { label: string; value: number; max: number; onChange: (n: number) => void }) {
-  return (
-    <input
-      type="number"
-      inputMode="numeric"
-      aria-label={label}
-      min={0}
-      max={Math.max(0, max)}
-      value={value}
-      onChange={(e) => onChange(e.target.valueAsNumber)}
-      className="block h-8 w-14 @[42rem]:ml-auto rounded-sm border border-rule-strong bg-paper-raised px-2 text-right text-sm tabular text-ink focus-visible:border-accent"
-    />
   );
 }
 

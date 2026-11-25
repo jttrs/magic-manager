@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { PurchaseOut, ReviewLineOut } from './api';
-import { chunk, clampDecision, decisionsBody, decisionTotals, defaultDecisions, listStatus, STATUS_LABEL, subtotalGap, valuation } from './purchases';
+import { addableCopies, addableOwnedLines, chunk, isAddable, listStatus, roiSummary, STATUS_LABEL, subtotalGap, valuation } from './purchases';
 
 const line = (o: Partial<ReviewLineOut>): ReviewLineOut => ({
   line_no: 1, kind: 'single', name: 'Sol Ring', set_name: 'Commander', condition: 'NM', finish: 'nonfoil',
   printing: { scryfall_id: 'x' } as ReviewLineOut['printing'], quantity: 3, unit_usd: 2, today_usd: 3,
-  matched: 0, added: 0, remaining: 3, owned: 2, matchable: 2, ...o,
+  matched: 0, added: 0, remaining: 3, owned: 2, ...o,
 });
 const purchase = (o: Partial<PurchaseOut>): PurchaseOut => ({
   purchase_id: 1, store: 'manapool', store_name: 'Mana Pool', order_id: 'A1', ordered_at: '2026-01-01', read_at: '2026-01-02',
@@ -24,24 +24,19 @@ describe('purchases view-model', () => {
     expect(listStatus('B2', 'manapool', ps)).toBe('unread');
   });
 
-  it('defaultDecisions: match mode pairs with owned copies, add mode brings everything in; skips unassignable lines', () => {
-    const lines = [line({}), line({ line_no: 2, kind: 'sealed' }), line({ line_no: 3, printing: null }), line({ line_no: 4, remaining: 0 }), line({ line_no: 5, matchable: 9, remaining: 4 })];
-    expect(defaultDecisions(lines, 'match')).toEqual({ 1: { match: 2, add: 0 }, 5: { match: 4, add: 0 } });
-    expect(defaultDecisions(lines, 'add')).toEqual({ 1: { match: 0, add: 3 }, 5: { match: 0, add: 4 } });
+  it('adds only single lines with a known printing and copies left', () => {
+    const lines = [line({}), line({ line_no: 2, kind: 'sealed' }), line({ line_no: 3, printing: null }), line({ line_no: 4, remaining: 0 }), line({ line_no: 5, remaining: 4 })];
+    expect(lines.map(isAddable)).toEqual([true, false, false, false, true]);
+    expect(addableCopies(lines)).toBe(7);
+    expect(addableCopies([])).toBe(0);
+    expect(addableOwnedLines([...lines.map((l) => ({ ...l, owned: 0 })), { ...lines[4], owned: 2 }, { ...lines[1], owned: 3 }, { ...lines[3], owned: 1 }])).toBe(1);
   });
 
-  it('clampDecision keeps match ≤ min(remaining, matchable) and add ≤ what is left', () => {
-    const l = line({});
-    expect(clampDecision(l, { match: 5, add: 5 })).toEqual({ match: 2, add: 1 });
-    expect(clampDecision(l, { match: -1, add: 9 })).toEqual({ match: 0, add: 3 });
-    expect(clampDecision(l, { match: Number.NaN, add: 1.9 })).toEqual({ match: 0, add: 1 });
-  });
-
-  it('decisionsBody drops zero rows; decisionTotals sums copies and what was paid', () => {
-    const lines = [line({}), line({ line_no: 2, unit_usd: 1.5 })];
-    const d = { 1: { match: 2, add: 1 }, 2: { match: 0, add: 0 } };
-    expect(decisionsBody(d)).toEqual([{ line_no: 1, match: 2, add: 1 }]);
-    expect(decisionTotals(lines, d)).toEqual({ matched: 2, added: 1, paid: 6 });
+  it('roiSummary signs the gain: + only when positive', () => {
+    const t = { orders: 3, paid_usd: 100, collection_value_usd: 130.5, gain_usd: 30.5 };
+    expect(roiSummary(t)).toMatchObject({ paid: 100, orders: 3, value: 130.5, sign: '+', gain: 30.5 });
+    expect(roiSummary({ ...t, collection_value_usd: 80, gain_usd: -20 })).toMatchObject({ sign: '−', gain: 20 });
+    expect(roiSummary({ ...t, collection_value_usd: 100, gain_usd: 0 }).sign).toBe('');
   });
 
   it('chunk splits into batches', () => {

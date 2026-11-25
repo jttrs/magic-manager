@@ -75,7 +75,7 @@ export function JobsView() {
   return (
     <ViewLayout label="Job controls" sidebar={sidebar} startOpen>
       <GuideSheet title="Jobs" summary="Long-running work runs in the background; progress streams live.">
-        <div className="grid h-full min-h-0 gap-6 overflow-y-auto px-5 pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="grid h-full min-h-0 gap-6 overflow-y-auto px-sheet pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
           <section aria-labelledby="live-h" className="min-w-0">
             <h2 id="live-h" className="border-b-2 border-rule-strong pb-1 text-2xl voice-condensed font-bold uppercase">Current run</h2>
             {!live ? (

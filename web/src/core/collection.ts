@@ -1,6 +1,6 @@
 // Collection view derivations: which printings show under the active filters,
 // what counts as "missing", and which finish a buy-list line should name.
-import type { CollectionCardOut, SourceOut } from './api';
+import type { CollectionCardOut } from './api';
 import { facetCounts, passes, type Facets } from './facets';
 
 export type CollectionFilters = {
@@ -14,21 +14,9 @@ export type CollectionFilters = {
   gaps?: boolean;
   /** Scryfall Tagger function roots to keep (OR); empty = no function filter. */
   fn?: readonly string[];
-  /** Acquisition sources to keep (OR): `kind:<deck|pool|singles|unknown>` or a
-   *  SourceOut key. Only owned printings have sources, so any value hides missing. */
-  src?: readonly string[];
   /** Only printings of cards you earmarked. */
   em?: boolean;
 };
-
-/** Kind of each source key, from the payload's source catalog. */
-export const sourceKinds = (sources: readonly SourceOut[] = []): ReadonlyMap<string, string> =>
-  new Map(sources.map((s) => [s.key, s.kind]));
-
-/** Does a printing match the active source selection (`kind:*` or exact key)? */
-function sourceMatch(c: CollectionCardOut, src: ReadonlySet<string>, kinds: ReadonlyMap<string, string>): boolean {
-  return (c.sources ?? []).some((k) => src.has(k) || src.has(`kind:${kinds.get(k)}`));
-}
 
 /** `fn` key for printings no function root covers. */
 export const NO_FUNCTION = '_none';
@@ -100,7 +88,7 @@ function ownedCopies(c: CollectionCardOut, exclude: readonly string[]): number {
   return ownedIn(c, allowedFinishes(c, new Set(exclude)));
 }
 
-type CollectionFacet = 'em' | 'src' | 'q' | 'fn' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
+type CollectionFacet = 'em' | 'q' | 'fn' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
 
 const FACET_GROUP: Record<'rarity' | 'treatment' | 'chase', TraitGroup> = { rarity: 'Rarity', treatment: 'Treatment', chase: 'Chase' };
 
@@ -115,13 +103,12 @@ function showState(c: CollectionCardOut, excluded: ReadonlySet<string>, gaps?: b
   return gaps && (c.card_owned ?? 0) > 0 ? null : 'missing';
 }
 
-function collectionFacets(f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): Facets<CollectionCardOut, CollectionFacet> {
+function collectionFacets(f: CollectionFilters): Facets<CollectionCardOut, CollectionFacet> {
   const q = f.q.trim().toLowerCase();
   const wantOwned = f.show.includes('owned');
   const wantMissing = f.show.includes('missing');
   const excluded = new Set(f.exclude);
   const fn = new Set(f.fn ?? []);
-  const src = new Set(f.src ?? []);
   const groupKeep = (g: TraitGroup) => {
     const keys = new Set(traitsIn(g).map((t) => t.key));
     const ex = new Set([...excluded].filter((k) => keys.has(k)));
@@ -130,7 +117,6 @@ function collectionFacets(f: CollectionFilters, kinds: ReadonlyMap<string, strin
   const rarity = groupKeep(FACET_GROUP.rarity), treatment = groupKeep(FACET_GROUP.treatment), chase = groupKeep(FACET_GROUP.chase);
   return {
     em: (c) => !f.em || !!c.earmarked,
-    src: (c) => !src.size || sourceMatch(c, src, kinds),
     q: (c) => !q || c.name.toLowerCase().includes(q),
     fn: (c) => !fn.size || fnKeys(c).some((k) => fn.has(k)),
     rarity, treatment, chase,
@@ -142,8 +128,8 @@ function collectionFacets(f: CollectionFilters, kinds: ReadonlyMap<string, strin
   };
 }
 
-export function filterCollection(cards: readonly CollectionCardOut[], f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): CollectionCardOut[] {
-  const facets = collectionFacets(f, kinds);
+export function filterCollection(cards: readonly CollectionCardOut[], f: CollectionFilters): CollectionCardOut[] {
+  const facets = collectionFacets(f);
   return cards.filter((c) => passes(c, facets));
 }
 
@@ -152,13 +138,11 @@ export type CollectionCounts = {
   /** Every trait key (rarity, finish, treatment, chase), each group counted under the other filters. */
   traits: Map<string, number>;
   fn: Map<string, number>;
-  /** Source keys and `kind:<kind>`, per printing. */
-  src: Map<string, number>;
 };
 
 /** Option counts for every collection control, each under every OTHER filter. */
-export function collectionCounts(cards: readonly CollectionCardOut[], f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): CollectionCounts {
-  const facets = collectionFacets(f, kinds);
+export function collectionCounts(cards: readonly CollectionCardOut[], f: CollectionFilters): CollectionCounts {
+  const facets = collectionFacets(f);
   const excluded = new Set(f.exclude);
   const show = { owned: 0, missing: 0 };
   for (const c of cards) {
@@ -172,7 +156,7 @@ export function collectionCounts(cards: readonly CollectionCardOut[], f: Collect
   // judges owned/missing on the checked finishes, so other finish exclusions must stay.
   const traits = new Map<string, number>();
   for (const t of TRAITS) {
-    const facetsT = collectionFacets({ ...f, exclude: f.exclude.filter((k) => k !== t.key) }, kinds);
+    const facetsT = collectionFacets({ ...f, exclude: f.exclude.filter((k) => k !== t.key) });
     const carries = t.group === 'Finish'
       ? (c: CollectionCardOut) => finishTraits(c).some((x) => x.trait === t.key)
       : (c: CollectionCardOut) => traitsOf(c).includes(t.key);
@@ -184,7 +168,6 @@ export function collectionCounts(cards: readonly CollectionCardOut[], f: Collect
     show,
     traits,
     fn: facetCounts(cards, facets, 'fn', fnKeys),
-    src: facetCounts(cards, facets, 'src', (c) => (c.sources ?? []).flatMap((s) => [s, ...(kinds.has(s) ? [`kind:${kinds.get(s)}`] : [])])),
   };
 }
 
@@ -238,22 +221,4 @@ export const traitsIn = (group: TraitGroup) => TRAITS.filter((t) => t.group === 
 export function setGroupIncluded(exclude: readonly string[], group: TraitGroup, included: readonly string[]): string[] {
   const keys = traitsIn(group).map((t) => t.key);
   return [...exclude.filter((k) => !keys.includes(k)), ...keys.filter((k) => !included.includes(k))];
-}
-
-const KIND_LABEL: Record<string, string> = {
-  pool: 'Any card pool', deck: 'Any precon deck', singles: 'Singles', unknown: 'Unknown origin',
-};
-const KIND_ORDER = ['pool', 'deck', 'singles', 'unknown'];
-const PRODUCT_GROUP: Record<string, string> = { pool: 'Card pools', deck: 'Precon decks' };
-
-/** "Acquired from" picker options: one per kind present, then every pool and
- *  precon deck product by name (· SET), with counts from `collectionCounts().src`. */
-export function sourceOptions(sources: readonly SourceOut[], counts: ReadonlyMap<string, number>) {
-  const present = new Set<string>(sources.map((s) => s.kind));
-  const kindOpts = KIND_ORDER.filter((k) => present.has(k)).map((k) => ({ value: `kind:${k}`, label: KIND_LABEL[k], count: counts.get(`kind:${k}`) ?? 0, group: 'By kind' }));
-  const products = sources
-    .filter((s) => s.kind in PRODUCT_GROUP)
-    .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.label.localeCompare(b.label))
-    .map((s) => ({ value: s.key, label: s.set_code ? `${s.label} · ${s.set_code.toUpperCase()}` : s.label, count: counts.get(s.key) ?? 0, group: PRODUCT_GROUP[s.kind] }));
-  return [...kindOpts, ...products];
 }

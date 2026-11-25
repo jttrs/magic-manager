@@ -6,6 +6,7 @@ import { typeGroup, TYPE_GROUPS } from './cardFacts';
 import { fmtCount } from './format';
 import { fromPrinting, groupCards, type GuideCard, type GuideGroup } from './guideCard';
 import { STATUS_LABEL } from './purchases';
+import { list } from './search';
 
 const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move', 'purchase', 'revert'] as const;
 export type HistoryKind = (typeof KINDS)[number];
@@ -32,8 +33,6 @@ export const KIND_HELP: Record<HistoryKind, string> = {
   revert: 'An import you took back out: the copies it added were removed (and any it removed put back). The original entry stays, marked reverted.',
 };
 
-const list = <T extends z.ZodTypeAny>(item: T) =>
-  z.preprocess((v) => (v == null ? undefined : Array.isArray(v) ? v : [v]), z.array(item));
 const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const historySearch = z.object({

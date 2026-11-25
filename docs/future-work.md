@@ -56,6 +56,11 @@ per-binder read), Archidekt deck via the companion, and a read with an unloaded 
 
 Small PRs, one per item.
 
+- **Collection's all-families payload:** Collection now opens on every family you own, which
+  sends every catalogued printing of ~37 families (~19 MB uncompressed, ~1.5 s on the owner's
+  data) even though Missing is off by default. Let `GET /api/collection` skip unowned printings
+  when only owned cards are shown, fetching the rest when Missing is switched on.
+
 - **CLI account delete and undo:** `mm auth delete-user` doesn't hold the web undo guard lock
   (the web route does) — a restore in flight could race the delete.
 - **Split paths with spaces/symlinks:** `db._open_split` opens through `file:` URIs; no test covers

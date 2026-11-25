@@ -188,10 +188,9 @@ const FINISHES = [
   { key: 'nonfoil', label: 'Nonfoil' },
   { key: 'foil', label: '✦ Foil' },
 ] as const;
-const KIND_NOTE: Record<string, string> = { pool: 'card pool', deck: 'precon deck' };
 
 /** This printing in your collection: per-finish owned / in built decks / unused, the built
- *  decks holding it, where the copies came from, and other printings you own. */
+ *  decks holding it, and other printings you own. */
 function YourCopies({ scryfallId, onLeave }: { scryfallId: string; onLeave: () => void }) {
   const q = useQuery(holdingsQuery(scryfallId));
   const id = useId();
@@ -251,27 +250,6 @@ function CopiesBody({ h, onLeave }: { h: HoldingsOut; onLeave: () => void }) {
                       {d.name}
                     </Link>
                     <span className="shrink-0 text-xs tabular text-ink-muted">×{d.count}{d.finish === 'foil' ? ' ✦' : ''}</span>
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </>
-        )}
-        {h.sources.length > 0 && (
-          <>
-            <dt className="text-ink-muted">Acquired from</dt>
-            <dd>
-              <ul className="flex flex-col gap-0.5">
-                {h.sources.map((cs) => (
-                  <li key={`${cs.source.key}|${cs.finish}`} className="flex items-baseline gap-2">
-                    <span className="min-w-0 truncate">
-                      {cs.source.label}
-                      {cs.source.set_code && <span className="tabular text-ink-muted"> · {cs.source.set_code.toUpperCase()}</span>}
-                    </span>
-                    {KIND_NOTE[cs.source.kind] && <span className="shrink-0 text-xs text-ink-muted">{KIND_NOTE[cs.source.kind]}</span>}
-                    <span className="ml-auto shrink-0 text-xs tabular text-ink-muted">
-                      ×{cs.copies}{cs.finish === 'foil' ? ' ✦' : ''}{(cs.acquisitions ?? 1) > 1 && ` · added ${cs.acquisitions} times`}
-                    </span>
                   </li>
                 ))}
               </ul>
