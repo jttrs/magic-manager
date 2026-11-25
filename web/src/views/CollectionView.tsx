@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
@@ -50,6 +50,12 @@ export function CollectionView() {
   // No families chosen = every family you own; the query waits for the list in that case.
   const allCodes = useMemo(() => fams.data?.map((f) => f.code) ?? [], [fams.data]);
   const scope = search.families.length ? search.families : allCodes;
+  // Every family you own spelled out (an old link, or ticking them all) is just "all": drop the list.
+  const coversAll = allCodes.length > 0 && search.families.length > 0 && allCodes.every((c) => search.families.includes(c));
+  useEffect(() => {
+    if (coversAll) set({ families: [] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `set` is a fresh closure each render
+  }, [coversAll]);
   const q = useQuery({ ...collectionQuery(scope), enabled: scope.length > 0 });
   const { selected, toggle, clear } = useSelection('collection');
   const hasScenes = (q.data?.scenes?.length ?? 0) > 0;

@@ -225,3 +225,21 @@ test('earmarked cards carry a mark, and a filter shows only them', async ({ page
   await page.getByRole('button', { name: 'Reset filters' }).click();
   await expect(page.getByRole('article')).toHaveCount(ownedN);
 });
+
+test('old JSON-style links are rewritten to the short form, and every family spelled out collapses to all', async ({ page }) => {
+  await page.goto('/collection?families=%5B%22blb%22%2C%22dft%22%5D&show=%5B%22owned%22%2C%22missing%22%5D');
+  await expect(page).toHaveURL(/\/collection\?families=blb%2Cdft&show=owned%2Cmissing$/);
+  const all = fixtures.families.map((f) => f.code);
+  await page.goto(`/collection?families=${encodeURIComponent(JSON.stringify(all))}`);
+  await expect(page).toHaveURL(/\/collection$/);
+  await expect(page.getByRole('button', { name: /Set families/ })).toContainText('All families');
+});
+
+test('a search with characters the browser re-encodes does not keep rewriting the link', async ({ page }) => {
+  await page.goto('/collection?q=Ahoy%20Mateys%27');
+  await expect(page.getByRole('searchbox', { name: 'Card name' })).toHaveValue("Ahoy Mateys'");
+  const before = await page.evaluate(() => history.length);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => history.length)).toBe(before);
+  await expect(page.getByRole('searchbox', { name: 'Card name' })).toHaveValue("Ahoy Mateys'");
+});
