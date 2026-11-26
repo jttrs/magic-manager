@@ -3249,6 +3249,12 @@ export type FamilySummaryOut = {
      * Member sets with printings, oldest first.
      */
     sets?: Array<SetRefOut>;
+    /**
+     * Family Released At
+     *
+     * The family's release date: its anchor set's (YYYY-MM-DD).
+     */
+    family_released_at?: string | null;
 };
 
 /**

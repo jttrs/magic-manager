@@ -83,6 +83,17 @@ def test_member_sets_list_oldest_first(tmp_db, family):
     assert [x["code"] for x in cv.family_cards("tst").summary.sets] == ["atst", "tst"]
 
 
+def test_family_release_date_is_the_anchor_sets(tmp_db, family, client):
+    """The family sorts as one unit: its date is the anchor's, not a member's
+    (atst is a month older) nor any printing's own."""
+    from magic_manager import collection_view as cv
+    _own("art")
+    assert cv.family_cards("tst").summary.family_released_at == "2025-02-01"
+    fam = client.get("/api/collection", params={"families": "tst"}).json()["families"][0]
+    assert fam["family_released_at"] == "2025-02-01"
+    assert {x["code"]: x["name"] for x in fam["sets"]}["atst"] == "Test Art Series"
+
+
 def test_etched_is_a_foil_finish(tmp_db, family):
     from magic_manager import collection_view as cv
     etch = next(c for c in cv.family_cards("tst").cards if c.scryfall_id == "etch")

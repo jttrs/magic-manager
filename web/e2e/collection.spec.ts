@@ -118,13 +118,13 @@ test('finish picker: unchecking Nonfoil judges owned/missing on foils', async ({
 test('sort builder: presets, keyboard reorder, direction, URL', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: /^Sort/ }).click();
-  await page.getByRole('button', { name: 'Set › Rarity › Number' }).click();
+  await page.getByRole('button', { name: 'Set name › Rarity › Number' }).click();
   await expect(page.getByRole('list', { name: 'Sort levels' }).getByRole('listitem')).toHaveCount(3);
   await page.getByRole('button', { name: 'Move Rarity up' }).click();
   await expect(page).toHaveURL(/sort=rarity%2Cset%2Ccn/);
   await page.getByRole('button', { name: /^Rarity: .* Reverse$/ }).click();
   await expect(page).toHaveURL(/sort=rarity%3Aasc%2Cset%2Ccn/);
-  await page.getByRole('button', { name: 'Remove Set' }).click();
+  await page.getByRole('button', { name: 'Remove Set name' }).click();
   await page.getByRole('combobox', { name: /Then by/ }).selectOption({ label: 'Price' });
   await expect(page).toHaveURL(/sort=rarity%3Aasc%2Ccn%2Cprice/);
   await page.keyboard.press('Escape');

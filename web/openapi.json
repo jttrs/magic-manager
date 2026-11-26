@@ -10482,6 +10482,18 @@
             "type": "array",
             "title": "Sets",
             "description": "Member sets with printings, oldest first."
+          },
+          "family_released_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family Released At",
+            "description": "The family's release date: its anchor set's (YYYY-MM-DD)."
           }
         },
         "type": "object",

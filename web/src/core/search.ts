@@ -7,7 +7,8 @@ import { SLD_BASES, SLD_EDITIONS, SLD_SORTS } from './secretLair';
 
 /** Default sort hierarchies (URL form) — the schema defaults and the header SortControl's "changed" baseline. */
 export const COMPARE_SORT_DEFAULT = 'inclusion,name';
-export const COLLECTION_SORT_DEFAULT = 'set,cn';
+/** Newest family first, then set name, then collector number. */
+export const COLLECTION_SORT_DEFAULT = 'released,set,cn';
 
 export const BUCKETS = ['a_only', 'both', 'b_only'] as const;
 export type Bucket = (typeof BUCKETS)[number];
