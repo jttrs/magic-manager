@@ -120,8 +120,9 @@ def test_descendants_and_roll_up_through_hierarchy(tmp_db, bulk):
     assert {MANA_PRODUCER, MANA_ROCK} <= scryfall_tags.descendants(RAMP)
     assert RAMP not in scryfall_tags.descendants(RAMP)
     up = scryfall_tags.roll_up([SOL_RING, WRATH, SWORDS, "no-such-oracle"])
-    # Sol Ring is tagged only `mana-rock` (+ meta) → rolls up to Ramp.
-    assert up[SOL_RING] == ["ramp"]
+    # Sol Ring is tagged only `mana-rock` (+ meta) → the Ramp umbrella AND the
+    # narrower Mana rocks root, config order.
+    assert up[SOL_RING] == ["ramp", "mana-rock"]
     # Wrath is a `sweeper` (child of removal) → Removal AND Board wipe, config order.
     assert up[WRATH] == ["removal", "board-wipe"]
     assert up[SWORDS] == ["removal", "lifegain"]
@@ -164,9 +165,14 @@ def test_function_tags_toml_matches_baked_default(tmp_path):
     baked = config.function_tags(override=tmp_path)  # empty dir → defaults
     assert from_file == baked
     keys = [r["key"] for r in baked["roots"]]
-    assert keys == ["ramp", "draw", "removal", "board-wipe", "counterspell", "tutor",
-                    "recursion", "protection", "token-maker", "sac-outlet",
-                    "lifegain", "evasion"]
+    assert keys == ["ramp", "mana-rock", "mana-creature", "land-ramp", "draw",
+                    "cantrip", "removal", "board-wipe", "burn", "counterspell",
+                    "discard", "tutor", "recursion", "reanimation", "mill",
+                    "graveyard-hate", "protection", "blink", "token-maker",
+                    "counters", "anthem", "combat-trick", "evasion", "haste",
+                    "extra-combat", "sac-outlet", "death-trigger", "lifegain",
+                    "cost-reduction", "mana-sink", "utility-land"]
+    assert len(set(keys)) == len(keys)
 
 
 # ---------- compare enrichment (one batched lookup) ----------
@@ -202,15 +208,16 @@ def test_compare_commanders_carries_functions_and_tags(tmp_db, bulk, fake_scryfa
     res = edhrec.compare_commanders("Alpha", "Beta")
     by = {c.name: c for c in res.cards}
     assert calls["n"] == 1
-    assert by["Sol Ring"].functions == ["ramp"]
+    assert by["Sol Ring"].functions == ["ramp", "mana-rock"]
     assert by["Wrath of God"].functions == ["removal", "board-wipe"]
     assert by["Sol Ring"].oracle_tags[0] == {"id": MANA_ROCK, "slug": "mana-rock", "label": "mana rock"}
 
     from magic_manager.api import edhrec as edhrec_api
     out = edhrec_api.compare("Alpha", "Beta")
-    assert [f.key for f in out.functions][:3] == ["ramp", "draw", "removal"]
+    assert [f.key for f in out.functions][:5] == ["ramp", "mana-rock", "mana-creature",
+                                                  "land-ramp", "draw"]
     sol = next(c for c in out.cards if c.name == "Sol Ring")
-    assert sol.functions == ["ramp"] and sol.oracle_tags[0].slug == "mana-rock"
+    assert sol.functions == ["ramp", "mana-rock"] and sol.oracle_tags[0].slug == "mana-rock"
 
 
 # ---------- CLI + job ----------

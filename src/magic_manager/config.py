@@ -302,20 +302,45 @@ def collection_formats(*, override: str | Path | None = None) -> dict[str, dict]
 # two in sync). Each root: (key, label, ((tag_uuid, tag_slug), …)).
 _DEFAULT_FUNCTION_ROOTS: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
     ("ramp", "Ramp", (("2f3e4ad7-5e60-41b4-bdbc-653f16869cf6", "ramp"),)),
+    ("mana-rock", "Mana rocks", (("523a4f29-25ee-483c-8123-a8e62b62af5a", "mana-rock"),)),
+    ("mana-creature", "Mana creatures", (("bb6c0ff7-302d-48ff-aee9-5cfefd44e351", "mana-dork"),)),
+    ("land-ramp", "Land ramp", (
+        ("8e3bf407-28b7-49ab-83d5-5a9c46b1cd79", "land-ramp"),
+        ("88e643b3-9fd4-4f46-9f36-cb1a72a7bc3c", "extra-land"),
+    )),
     ("draw", "Card draw", (("b6448c45-ce65-4848-aa98-2151e4e07437", "draw"),)),
+    ("cantrip", "Cantrip", (("42313c19-8be2-47d9-9d3a-99c39725b87d", "cantrip"),)),
     ("removal", "Removal", (("444f824c-f910-4530-9dbe-ede7a84cd7f9", "removal"),)),
     ("board-wipe", "Board wipe", (("3fb7e4fd-5304-4120-b7c4-8a89f70ad3f0", "sweeper"),)),
+    ("burn", "Burn", (("0641a74c-4dd5-426d-be58-2ab86d71995d", "burn"),)),
     ("counterspell", "Counterspell", (("690fc968-48ba-4854-a948-3db6bf19d3a9", "counterspell"),)),
+    ("discard", "Discard", (("fce2f2c1-bb65-45e8-8c0a-dd66093067d7", "discard"),)),
     ("tutor", "Tutor", (("c768d2ec-3264-4a90-a98f-bea8467857d3", "tutor"),)),
     ("recursion", "Recursion", (("82b824ad-648f-467f-a190-2e0fa9a795d2", "recursion"),)),
+    ("reanimation", "Reanimation", (("524d7da0-9b4b-4567-bf38-a867673e21f3", "reanimate"),)),
+    ("mill", "Mill", (("82b4e653-20f8-44a9-ab46-621f7c49b135", "mill"),)),
+    ("graveyard-hate", "Graveyard hate", (("486b89e1-bd1c-4cbc-8aaf-5e9249478650", "hate-graveyard"),)),
     ("protection", "Protection", (("6e2cdc7c-b02c-4b59-a171-f93723721b79", "protection"),)),
+    ("blink", "Blink", (("e4f2ccba-e715-40cb-8540-5a5d50a5a7bc", "flicker"),)),
     ("token-maker", "Token maker", (
         ("a9657a5d-e7f8-4000-a795-7a78b5fb8923", "repeatable-token-generator"),
         ("07808167-c4ef-4a2d-bfe9-fa38a5a9d17b", "multiple-bodies"),
     )),
-    ("sac-outlet", "Sac outlet", (("c7bd55a7-1ea0-49da-b25e-0be470fbe8ec", "sacrifice-outlet"),)),
-    ("lifegain", "Lifegain", (("4caab3cc-1d60-44fb-a26a-cc833bc67c97", "lifegain"),)),
+    ("counters", "+1/+1 counters", (
+        ("c1100c9e-08bf-4845-9263-1a5f86b9005f", "gives-pp-counters"),
+        ("aaba92d3-4e92-4ac7-9111-3576e1fc178c", "pp-counters-matter"),
+    )),
+    ("anthem", "Anthem", (("0454fcef-0118-4f10-b9d7-c071845bfbd4", "anthem"),)),
+    ("combat-trick", "Combat trick", (("36f2a0d4-b689-4011-9750-472dd786f2de", "combat-trick"),)),
     ("evasion", "Evasion", (("6cdeab4c-72a6-4f40-ab19-14284d6cf775", "gives-evasion"),)),
+    ("haste", "Haste enabler", (("702286e6-707d-4adb-9a98-21de8ca13519", "gives-haste"),)),
+    ("extra-combat", "Extra combat", (("b0fb4bcb-d667-4799-9eee-7071c69bcd55", "extra-combat-phase"),)),
+    ("sac-outlet", "Sac outlet", (("c7bd55a7-1ea0-49da-b25e-0be470fbe8ec", "sacrifice-outlet"),)),
+    ("death-trigger", "Death trigger", (("3bcd7cdd-61ca-42dd-adc5-1a695eaec2d2", "death-trigger"),)),
+    ("lifegain", "Lifegain", (("4caab3cc-1d60-44fb-a26a-cc833bc67c97", "lifegain"),)),
+    ("cost-reduction", "Cost reduction", (("1a8e9788-b694-4330-a1a4-1aed6183bd57", "cost-reducer"),)),
+    ("mana-sink", "Mana sink", (("ef02b1a3-a5ae-4d8a-86ca-302d6f477744", "mana-sink"),)),
+    ("utility-land", "Utility land", (("5e708c4d-9992-431e-afe1-fb5af05b2ea3", "utility-land"),)),
 )
 _DEFAULT_PREVIEW_LIMIT = 6
 _DEFAULT_PREVIEW_EXCLUDE: tuple[str, ...] = (

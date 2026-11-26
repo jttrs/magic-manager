@@ -18,6 +18,35 @@
 #   - Evasion = `gives-evasion` (grants evasion to others). The `evasion` tag tags
 #     every flyer (~5.6k cards) — a keyword, not a deck function.
 #   - Counterspell's upstream parent is `blue-effect`; we root at `counterspell`.
+#
+# 2026-11 expansion (owner feedback: the filter felt sparse — 99.9% of owned
+# cards carry Tagger tags, but the 12 roots left ~3.0k of ~9.2k owned cards with
+# no function). Owned-card coverage measured on the real collection, roll-up
+# through descendants:
+#   - Ramp stays as the umbrella root with three narrower roots beside it, like
+#     Removal ⊃ Board wipe: Mana rocks = `mana-rock`, Mana creatures =
+#     `mana-dork`, Land ramp = `land-ramp` + `extra-land` (play/put extra lands).
+#     Dropping Ramp would strip 342 owned ramp cards (rituals, `combat-ramp`,
+#     Utopia Sprawl-style enchantments, `mana-increaser`) of ramp — 73 of any function.
+#   - Cantrip ⊂ Card draw and Reanimation ⊂ Recursion upstream (every card in
+#     the narrower root is in the broader one); kept as narrower functions.
+#   - Burn = `burn` (player + creature + battle damage), so it overlaps Removal
+#     through `removal-burn` — expected.
+#   - Discard = `discard` (makes a player discard: hand disruption), NOT
+#     `discard-outlet` (loot/rummage — your own discard as a cost).
+#   - Mill = `mill` (self-mill + opponent mill; self-mill incl. surveil is a
+#     graveyard-deck function too). Graveyard hate = `hate-graveyard`.
+#   - +1/+1 counters = `gives-pp-counters` (puts counters on others) +
+#     `pp-counters-matter` (payoffs), NOT `gains-pp-counters` (creatures that
+#     grow themselves — a keyword, not a deck function).
+#   - Haste enabler = `gives-haste` (not `gains-haste`, the creature's own keyword).
+#   - Blink = `flicker`; Cost reduction = `cost-reducer`; Extra combat =
+#     `extra-combat-phase` (only ~27 owned cards, kept: distinctive and nothing
+#     else covers it); Death trigger = `death-trigger`; Utility land =
+#     `utility-land`; Mana sink = `mana-sink`; Anthem = `anthem`;
+#     Combat trick = `combat-trick`; Cantrip = `cantrip`.
+#   - No candidate was dropped: every one covered ≥27 owned cards and none
+#     duplicated another root outright.
 
 # Max oracle tags shown per card in previews (highest weight first).
 preview_limit = 6
@@ -36,9 +65,32 @@ label = "Ramp"
 tags = [{ id = "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6", slug = "ramp" }]
 
 [[roots]]
+key = "mana-rock"
+label = "Mana rocks"
+tags = [{ id = "523a4f29-25ee-483c-8123-a8e62b62af5a", slug = "mana-rock" }]
+
+[[roots]]
+key = "mana-creature"
+label = "Mana creatures"
+tags = [{ id = "bb6c0ff7-302d-48ff-aee9-5cfefd44e351", slug = "mana-dork" }]
+
+[[roots]]
+key = "land-ramp"
+label = "Land ramp"
+tags = [
+  { id = "8e3bf407-28b7-49ab-83d5-5a9c46b1cd79", slug = "land-ramp" },
+  { id = "88e643b3-9fd4-4f46-9f36-cb1a72a7bc3c", slug = "extra-land" },
+]
+
+[[roots]]
 key = "draw"
 label = "Card draw"
 tags = [{ id = "b6448c45-ce65-4848-aa98-2151e4e07437", slug = "draw" }]
+
+[[roots]]
+key = "cantrip"
+label = "Cantrip"
+tags = [{ id = "42313c19-8be2-47d9-9d3a-99c39725b87d", slug = "cantrip" }]
 
 [[roots]]
 key = "removal"
@@ -51,9 +103,19 @@ label = "Board wipe"
 tags = [{ id = "3fb7e4fd-5304-4120-b7c4-8a89f70ad3f0", slug = "sweeper" }]
 
 [[roots]]
+key = "burn"
+label = "Burn"
+tags = [{ id = "0641a74c-4dd5-426d-be58-2ab86d71995d", slug = "burn" }]
+
+[[roots]]
 key = "counterspell"
 label = "Counterspell"
 tags = [{ id = "690fc968-48ba-4854-a948-3db6bf19d3a9", slug = "counterspell" }]
+
+[[roots]]
+key = "discard"
+label = "Discard"
+tags = [{ id = "fce2f2c1-bb65-45e8-8c0a-dd66093067d7", slug = "discard" }]
 
 [[roots]]
 key = "tutor"
@@ -66,9 +128,29 @@ label = "Recursion"
 tags = [{ id = "82b824ad-648f-467f-a190-2e0fa9a795d2", slug = "recursion" }]
 
 [[roots]]
+key = "reanimation"
+label = "Reanimation"
+tags = [{ id = "524d7da0-9b4b-4567-bf38-a867673e21f3", slug = "reanimate" }]
+
+[[roots]]
+key = "mill"
+label = "Mill"
+tags = [{ id = "82b4e653-20f8-44a9-ab46-621f7c49b135", slug = "mill" }]
+
+[[roots]]
+key = "graveyard-hate"
+label = "Graveyard hate"
+tags = [{ id = "486b89e1-bd1c-4cbc-8aaf-5e9249478650", slug = "hate-graveyard" }]
+
+[[roots]]
 key = "protection"
 label = "Protection"
 tags = [{ id = "6e2cdc7c-b02c-4b59-a171-f93723721b79", slug = "protection" }]
+
+[[roots]]
+key = "blink"
+label = "Blink"
+tags = [{ id = "e4f2ccba-e715-40cb-8540-5a5d50a5a7bc", slug = "flicker" }]
 
 [[roots]]
 key = "token-maker"
@@ -79,9 +161,47 @@ tags = [
 ]
 
 [[roots]]
+key = "counters"
+label = "+1/+1 counters"
+tags = [
+  { id = "c1100c9e-08bf-4845-9263-1a5f86b9005f", slug = "gives-pp-counters" },
+  { id = "aaba92d3-4e92-4ac7-9111-3576e1fc178c", slug = "pp-counters-matter" },
+]
+
+[[roots]]
+key = "anthem"
+label = "Anthem"
+tags = [{ id = "0454fcef-0118-4f10-b9d7-c071845bfbd4", slug = "anthem" }]
+
+[[roots]]
+key = "combat-trick"
+label = "Combat trick"
+tags = [{ id = "36f2a0d4-b689-4011-9750-472dd786f2de", slug = "combat-trick" }]
+
+[[roots]]
+key = "evasion"
+label = "Evasion"
+tags = [{ id = "6cdeab4c-72a6-4f40-ab19-14284d6cf775", slug = "gives-evasion" }]
+
+[[roots]]
+key = "haste"
+label = "Haste enabler"
+tags = [{ id = "702286e6-707d-4adb-9a98-21de8ca13519", slug = "gives-haste" }]
+
+[[roots]]
+key = "extra-combat"
+label = "Extra combat"
+tags = [{ id = "b0fb4bcb-d667-4799-9eee-7071c69bcd55", slug = "extra-combat-phase" }]
+
+[[roots]]
 key = "sac-outlet"
 label = "Sac outlet"
 tags = [{ id = "c7bd55a7-1ea0-49da-b25e-0be470fbe8ec", slug = "sacrifice-outlet" }]
+
+[[roots]]
+key = "death-trigger"
+label = "Death trigger"
+tags = [{ id = "3bcd7cdd-61ca-42dd-adc5-1a695eaec2d2", slug = "death-trigger" }]
 
 [[roots]]
 key = "lifegain"
@@ -89,6 +209,16 @@ label = "Lifegain"
 tags = [{ id = "4caab3cc-1d60-44fb-a26a-cc833bc67c97", slug = "lifegain" }]
 
 [[roots]]
-key = "evasion"
-label = "Evasion"
-tags = [{ id = "6cdeab4c-72a6-4f40-ab19-14284d6cf775", slug = "gives-evasion" }]
+key = "cost-reduction"
+label = "Cost reduction"
+tags = [{ id = "1a8e9788-b694-4330-a1a4-1aed6183bd57", slug = "cost-reducer" }]
+
+[[roots]]
+key = "mana-sink"
+label = "Mana sink"
+tags = [{ id = "ef02b1a3-a5ae-4d8a-86ca-302d6f477744", slug = "mana-sink" }]
+
+[[roots]]
+key = "utility-land"
+label = "Utility land"
+tags = [{ id = "5e708c4d-9992-431e-afe1-fb5af05b2ea3", slug = "utility-land" }]
