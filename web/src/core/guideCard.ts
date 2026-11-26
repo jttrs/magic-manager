@@ -1,7 +1,7 @@
 // The ONE card view-model every guide component renders. Each domain view maps
 // into it with a pure function, so card-diff and commander-compare share every
 // component (tile, row, grid, preview) and differ only in their mapper.
-import type { CollectionCardOut, CompareCardOut, DeckLineOut, PrintingOut } from './api';
+import type { CollectionCardOut, CompareCardOut, DeckLineOut, FamilySummaryOut, PrintingOut } from './api';
 import { bucketInclusion } from './compare';
 import { typeGroup } from './cardFacts';
 
@@ -30,7 +30,13 @@ export type GuideCard = {
   cmc: number | null;
   colors: string[];
   typeGroup: string;
+  /** The printing's own release date. */
   released: string | null;
+  /** Collection only: the set's name, the family's anchor code and the family's
+   *  release date (its anchor set's), so a family sorts as one unit. */
+  setName?: string | null;
+  family?: string | null;
+  familyReleased?: string | null;
   /** Owned copies per finish (collection); null when ownership isn't shown. */
   owned: Partial<Record<'nonfoil' | 'foil', number>> | null;
   /** True when the printing is a gap under the active missing basis. */
@@ -103,8 +109,29 @@ export const treatmentLabels = (codes: string): string[] =>
 /** The tag a Collection printing of an earmarked card carries (shown like Chase). */
 export const EARMARKED_TAG = 'Earmarked';
 
+/** Per-family facts the Collection mapper attaches (see `familyFacts`). */
+export type FamilyFacts = { released: ReadonlyMap<string, string | null>; setNames: ReadonlyMap<string, string> };
+
+/** Family code → release date and set code (lower case) → name, from the payload's families. */
+export function familyFacts(families: readonly FamilySummaryOut[]): FamilyFacts {
+  return {
+    released: new Map(families.map((f) => [f.code, f.family_released_at ?? null])),
+    setNames: new Map(families.flatMap((f) => (f.sets ?? []).map((x) => [x.code.toLowerCase(), x.name] as const))),
+  };
+}
+
+/** Families in the order their first card appears in `sorted` (the guide's
+ *  family heads follow a family-level sort such as release date). */
+export function familiesInCardOrder<F extends { code: string }>(families: readonly F[], sorted: readonly GuideCard[]): F[] {
+  const first = new Map<string, number>();
+  sorted.forEach((c, i) => { if (c.family && !first.has(c.family)) first.set(c.family, i); });
+  return [...families].sort((a, b) => (first.get(a.code) ?? Infinity) - (first.get(b.code) ?? Infinity));
+}
+
 /** Collection mapper. `missing` is decided by the caller's missing basis. */
-export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
+export function fromCollection(
+  c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}, facts?: FamilyFacts,
+): GuideCard {
   return {
     key: c.scryfall_id,
     scryfallId: c.scryfall_id,
@@ -123,6 +150,9 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     colors: c.color_identity,
     typeGroup: typeGroup(c.type_line),
     released: c.released_at,
+    setName: facts?.setNames.get(c.set_code.toLowerCase()) ?? null,
+    family: c.family,
+    familyReleased: facts?.released.get(c.family) ?? null,
     owned: c.owned as GuideCard['owned'],
     missing,
     tags: [...(c.earmarked ? [EARMARKED_TAG] : []), ...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],

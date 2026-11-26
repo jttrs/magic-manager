@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CollectionCardOut, CompareCardOut } from './api';
+import type { CollectionCardOut, CompareCardOut, FamilySummaryOut } from './api';
 import { CARD_SORT } from './cardSort';
 import { colorRank, typeGroup } from './cardFacts';
 import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, traitsOf, type CollectionFilters } from './collection';
 import { bucketCards, COMPARE_SORT, matches, tagLabel } from './compare';
-import { exportLines, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
+import { exportLines, familiesInCardOrder, familyFacts, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
 import { collectionSearch, compareSearch } from './search';
 import { composeSort, decodeSort, encodeSort, leadSection, sortBy } from './sort';
 
@@ -64,6 +64,46 @@ describe('sort rules', () => {
     expect(sortBy(cards, rules, CARD_SORT).map((c) => c.rarity)).toEqual(['mythic', 'rare', 'common']);
     expect(leadSection(rules, CARD_SORT)!(cards[0])).toBe('Common');
     expect(leadSection(decodeSort('price', CARD_SORT), CARD_SORT)).toBeNull();
+  });
+  it('release date is the FAMILY date: a family stays one unit, newest first, tied families never interleave', () => {
+    const fam = (code: string, released: string, sets: [string, string][]): FamilySummaryOut => ({
+      code, name: code, printings: 0, owned_printings: 0, owned_copies: 0, owned_usd: 0, missing_printings: 0, missing_usd: 0,
+      sets: sets.map(([c, n]) => ({ code: c, name: n })), family_released_at: released,
+    });
+    const facts = familyFacts([
+      fam('spm', '2025-09-26', [['spm', 'Spider-Man'], ['spe', 'Spider-Man Eternal']]),
+      fam('c21', '2021-04-23', [['c21', 'Commander 2021']]),
+      fam('stx', '2021-04-23', [['stx', 'Strixhaven'], ['sta', 'Mystical Archive']]),
+    ]);
+    const mk = (id: string, family: string, set: string, cn: string, printed: string) =>
+      fromCollection(card({ scryfall_id: id, family, set_code: set, collector_number: cn, released_at: printed }), false, {}, facts);
+    const cards = [
+      mk('stx2', 'stx', 'stx', '2', '2021-04-23'),
+      mk('c21', 'c21', 'c21', '1', '2021-04-23'),
+      mk('spm-early', 'spm', 'spm', '9', '2025-09-23'),   // printed 3 days before the family
+      mk('sta1', 'stx', 'sta', '1', '2021-04-23'),
+      mk('spe1', 'spm', 'spe', '1', '2025-09-26'),
+      mk('stx1', 'stx', 'stx', '1', '2021-04-20'),
+    ];
+    const rules = decodeSort('released,set,cn', CARD_SORT);
+    const sorted = sortBy(cards, rules, CARD_SORT);
+    const fams = sorted.map((c) => c.family);
+    // each family contiguous, newest first; the same-day families stay apart
+    expect(fams).toEqual(['spm', 'spm', 'stx', 'stx', 'stx', 'c21']);
+    // inside a family: set NAME order (Mystical Archive before Strixhaven), then number
+    expect(sorted.map((c) => c.key)).toEqual(['spm-early', 'spe1', 'sta1', 'stx1', 'stx2', 'c21']);
+    expect(leadSection(rules, CARD_SORT)!(sorted[0])).toBe('2025');
+    expect(leadSection(decodeSort('set', CARD_SORT), CARD_SORT)!(sorted[2])).toBe('Mystical Archive');
+    // the printing's own date stays available as its own key
+    expect(sortBy(cards, decodeSort('printed', CARD_SORT), CARD_SORT)[0].key).toBe('stx1');
+    // family heads follow the sorted cards
+    expect(familiesInCardOrder([fam('c21', '', []), fam('stx', '', []), fam('spm', '', [])], sorted).map((f) => f.code)).toEqual(['spm', 'stx', 'c21']);
+  });
+  it('without family facts, set sorts by code and release by the printing date', () => {
+    const a = fromCollection(card({ scryfall_id: 'a', set_code: 'zzz', released_at: '2020-01-01' }), false);
+    const b = fromCollection(card({ scryfall_id: 'b', set_code: 'aaa', released_at: '2024-01-01' }), false);
+    expect(sortBy([a, b], decodeSort('set', CARD_SORT), CARD_SORT).map((c) => c.key)).toEqual(['b', 'a']);
+    expect(sortBy([a, b], decodeSort('released', CARD_SORT), CARD_SORT).map((c) => c.key)).toEqual(['b', 'a']);
   });
   it('compare registry ranks by bucket inclusion', () => {
     const cs = [cmp({ name: 'B', a_pct: 10 }), cmp({ name: 'A', a_pct: 90 }), cmp({ name: 'C', bucket: 'both', a_pct: 20, b_pct: 50 })];
@@ -184,6 +224,7 @@ describe('URL schemas', () => {
     expect(s.families).toEqual(['fin']);
     expect(s.show).toEqual(['owned']);
     expect(d.exclude).toEqual([]);
-    expect(s.sort).toBe('set,cn');
+    expect(s.sort).toBe('released,set,cn');
+    expect(decodeSort(collectionSearch.parse({ sort: 'set,cn' }).sort, CARD_SORT)).toEqual([{ key: 'set', dir: 'asc' }, { key: 'cn', dir: 'asc' }]);
   });
 });

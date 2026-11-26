@@ -30,7 +30,7 @@ import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollectio
 import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { exportLines, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
+import { exportLines, familiesInCardOrder, familyFacts, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch, COLLECTION_SORT_DEFAULT } from '../core/search';
 import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../core/sort';
 
@@ -346,20 +346,24 @@ function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boole
   const shown = filterCollection(data.cards, search);
   const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
   const ranks = sceneRanks(data.scenes ?? []);
+  const facts = familyFacts(data.families);
   const scenes = new Map((data.scenes ?? []).map((sc) => [sc.key, sc]));
   const cards = sortBy(
-    shown.map((c) => ({ ...fromCollection(c, isMissing(c, search.exclude), fnLabels), sceneRank: c.scene ? ranks.get(c.scene) ?? null : null })),
+    shown.map((c) => ({ ...fromCollection(c, isMissing(c, search.exclude), fnLabels, facts), sceneRank: c.scene ? ranks.get(c.scene) ?? null : null })),
     rules,
     COLLECTION_SORT,
   );
-  const section = leadSection(rules, COLLECTION_SORT);
-  const bySet = rules[0]?.key === 'set';
-  const byScene = rules[0]?.key === 'scene';
+  // Release date is a family fact: it orders the family heads, and the groups
+  // inside each family come from the next rule (one year head per family says nothing).
+  const byRelease = rules[0]?.key === 'released';
+  const groupRules = byRelease ? rules.slice(1) : rules;
+  const section = leadSection(groupRules, COLLECTION_SORT);
+  const bySet = groupRules[0]?.key === 'set';
+  const byScene = groupRules[0]?.key === 'scene';
   const sections: GuideSection[] = [];
-  for (const fam of data.families) {
+  for (const fam of byRelease ? familiesInCardOrder(data.families, cards) : data.families) {
     const famCards = cards.filter((c) => c.group === fam.code);
     if (!famCards.length) continue;
-    const setNames = new Map((fam.sets ?? []).map((x) => [x.code.toUpperCase(), x.name]));
     sections.push({
       key: `fam:${fam.code}`,
       label: fam.name,
@@ -389,13 +393,13 @@ function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boole
           });
           continue;
         }
-        const setName = bySet ? setNames.get(g.label) : undefined;
+        const setCode = bySet ? g.items[0]?.setCode : undefined;
         sections.push({
           ...g,
           key: `${fam.code}:${g.key}`,
           level: 2,
           noun: bySet ? 'set' : 'group',
-          detail: setName ? <span className="truncate text-sm normal-case text-ink-muted">{setName}</span> : undefined,
+          detail: setCode && setCode !== g.label ? <span className="truncate text-sm tabular text-ink-muted">{setCode}</span> : undefined,
         });
       }
     } else {

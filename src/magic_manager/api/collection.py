@@ -37,6 +37,7 @@ class FamilySummaryOut(BaseModel):
     missing_printings: int
     missing_usd: float
     sets: list[SetRefOut] = Field(default_factory=list, description="Member sets with printings, oldest first.")
+    family_released_at: str | None = Field(None, description="The family's release date: its anchor set's (YYYY-MM-DD).")
 
 
 class CollectionCardOut(BaseModel):

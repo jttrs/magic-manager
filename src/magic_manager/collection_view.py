@@ -90,6 +90,9 @@ class FamilySummary:
     missing_usd: float
     # Member sets that contribute printings, oldest release first: [{code, name}].
     sets: list[dict[str, str]] = field(default_factory=list)
+    # The family's release date = its anchor set's (Scryfall ``released_at``), so a
+    # family sorts as one unit even when its printings carry different dates.
+    family_released_at: str | None = None
 
 
 @dataclass
@@ -259,8 +262,15 @@ def family_cards(code: str) -> FamilyCollection:
                 key=lambda code: ((all_sets.get(code) or {}).get("released_at") or "9999", code),
             )
         ],
+        family_released_at=family_release_date(parent_code, all_sets),
     )
     return FamilyCollection(summary=summary, cards=cards)
+
+
+def family_release_date(parent_code: str, all_sets: dict[str, dict]) -> str | None:
+    """The family's release date: its anchor set's ``released_at`` (per-printing
+    dates split families — SPM's early printings, FIN's later promos)."""
+    return (all_sets.get(parent_code.lower()) or {}).get("released_at") or None
 
 
 def buy_lines(items: list[tuple[str, str, int]], target: str) -> str:
