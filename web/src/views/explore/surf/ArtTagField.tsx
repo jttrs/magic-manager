@@ -2,6 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { artTagsQuery } from '../../../app/queries';
 import { useDebounced } from '../../../app/useDebounced';
+import { Pressable } from '../../../components/controls/Pressable';
+import { RailField } from '../../../components/controls/RailField';
+import { TextInput } from '../../../components/controls/TextField';
+import { CloseMark } from '../../../components/icons/marks';
 import { fmtInt } from '../../../core/format';
 
 const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -20,25 +24,23 @@ export function ArtTagField({ value, onChange }: { value: string[]; onChange: (v
     setText('');
   };
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm voice-semi text-on-chrome-muted">Art tags</label>
+    <RailField label="Art tags" htmlFor={id}>
       {value.length > 0 && (
         <ul aria-label="Art tags" className="flex flex-wrap gap-1.5">
           {value.map((t) => (
             <li key={t}>
-              <button
-                type="button"
+              <Pressable
                 onClick={() => onChange(value.filter((v) => v !== t))}
                 aria-label={`Remove art tag ${tagLabel(t)}`}
-                className="inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-pill border border-accent bg-accent px-2.5 text-xs voice-semi text-on-accent"
+                className="inline-flex min-h-7 items-center gap-1.5 rounded-pill border border-accent bg-accent px-2.5 text-xs voice-semi text-on-accent!"
               >
-                {tagLabel(t)} <span aria-hidden="true">×</span>
-              </button>
+                {tagLabel(t)} <CloseMark className="size-icon-xs" />
+              </Pressable>
             </li>
           ))}
         </ul>
       )}
-      <input
+      <TextInput
         id={id}
         type="search"
         value={text}
@@ -53,7 +55,6 @@ export function ArtTagField({ value, onChange }: { value: string[]; onChange: (v
         autoComplete="off"
         spellCheck={false}
         aria-describedby={`${id}-hits`}
-        className="min-h-9 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
       />
       <div id={`${id}-hits`} aria-live="polite" className="flex flex-wrap gap-1.5 empty:hidden">
         {needle && res.data && !res.data.synced && (
@@ -63,17 +64,16 @@ export function ArtTagField({ value, onChange }: { value: string[]; onChange: (v
           <span className="text-xs text-on-chrome-muted">No art tag matches “{needle}”.</span>
         )}
         {hits.map((t) => (
-          <button
+          <Pressable
             key={t.id}
-            type="button"
             onClick={() => add(t.slug)}
             title={`${fmtInt(t.illustrations)} artworks tagged ${t.label}`}
-            className="inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-pill border border-chrome-line px-2.5 text-xs voice-semi text-on-chrome-muted transition-colors ease-guide hover:border-on-chrome-muted hover:text-on-chrome"
+            className="inline-flex min-h-7 items-center gap-1.5 rounded-pill border border-chrome-line px-2.5 text-xs voice-semi text-on-chrome-muted transition-colors ease-guide hover:border-on-chrome-muted hover:text-on-chrome"
           >
             {t.label} <span className="tabular opacity-75">{fmtInt(t.illustrations)}</span>
-          </button>
+          </Pressable>
         ))}
       </div>
-    </div>
+    </RailField>
   );
 }

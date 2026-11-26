@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardE
 import { Button } from '../../components/Button';
 import { CardArt } from '../../components/CardFace';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { CountInput } from '../../components/controls/Inputs';
 import type { GuideSection } from '../../components/VirtualGuide';
 import type { CollectionCardOut } from '../../core/api';
 import { cellKey, cellValue, countFinishes, nextCell, ownedOf, parseCount, pledgedOf, type Draft, type Finish } from '../../core/checklist';
@@ -99,7 +100,7 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
 
   return (
     <div className="@container flex h-full min-h-0 flex-col">
-      <div aria-hidden className="mx-sheet grid grid-cols-[minmax(0,1fr)_repeat(2,5.25rem)] items-end gap-2 border-b-2 border-rule-strong pb-1 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,6rem)]">
+      <div aria-hidden className="mx-sheet grid grid-cols-[minmax(0,1fr)_repeat(2,5.25rem)] items-end gap-2 border-b-2 border-rule-strong pb-1 text-xs voice-semi font-medium uppercase tracking-caps-wide text-ink-muted @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,6rem)]">
         <span className="@[26rem]:col-span-2">Printing</span>
         <span className="text-right">Nonfoil</span>
         <span className="text-right">Foil ✦</span>
@@ -112,7 +113,7 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
               <div key={vi.key} data-index={vi.index} ref={virt.measureElement} className="absolute left-0 top-0 w-full" style={{ transform: `translateY(${vi.start}px)` }}>
                 {row.kind === 'head' ? (
                   <div className={row.level === 1 ? 'flex items-end border-b-2 border-rule-strong pb-1.5 pt-5 text-ink' : 'flex items-center border-b border-rule pb-1 pt-3 text-ink-muted'}>
-                    <span className={row.level === 1 ? 'text-2xl voice-condensed font-bold uppercase leading-none' : 'text-sm voice-condensed font-medium uppercase tracking-[0.06em]'}>{row.label}</span>
+                    <span className={row.level === 1 ? 'text-2xl voice-condensed font-bold uppercase leading-none' : 'text-sm voice-condensed font-medium uppercase tracking-caps'}>{row.label}</span>
                     {row.meta && <span className="ml-auto text-sm tabular">{row.meta}</span>}
                   </div>
                 ) : (
@@ -220,11 +221,10 @@ function CountCell({ label, was, value, pledged, moved, focused, grabFocus, onFo
       <span className={`min-w-6 whitespace-nowrap text-right text-2xs tabular voice-semi ${moved || delta > 0 ? 'text-accent-ink' : 'text-danger'}`} aria-hidden={delta === 0 && !moved}>
         {moved ? `now ${was}` : delta > 0 ? `+${delta}` : delta < 0 ? `−${-delta}` : ''}
       </span>
-      <input
+      <CountInput
         ref={ref}
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
+        state={bad || low ? 'invalid' : moved ? 'moved' : 'ok'}
+        changed={delta !== 0}
         aria-label={label}
         aria-invalid={bad || low || undefined}
         aria-description={moved ? `Changed to ${was} since you started editing counts` : undefined}
@@ -251,7 +251,6 @@ function CountCell({ label, was, value, pledged, moved, focused, grabFocus, onFo
           if (e.key === 'Escape') setText(String(was));
           onKeyDown(e);
         }}
-        className={`h-7 w-11 rounded-xs border bg-paper-raised px-1.5 text-right text-sm tabular text-ink outline-none transition-[border-color,background-color] duration-150 ease-guide focus:border-accent focus:bg-paper ${bad || low ? 'border-danger' : moved ? 'border-accent ring-2 ring-accent' : 'border-rule'} ${delta !== 0 ? 'font-semibold' : ''}`}
       />
     </span>
   );
@@ -293,7 +292,7 @@ export function ChecklistNotes({ checklist: c }: { checklist: Checklist }) {
           <span>
             {fmtInt(moved)} {moved === 1 ? 'count changed' : 'counts changed'} in your collection since you started editing counts. Each flagged cell shows the new number — retype it, or press Enter to keep yours.
           </span>
-          <button type="button" onClick={() => c.confirm()} className="cursor-pointer text-accent-ink underline hover:text-ink">Keep all my counts</button>
+          <Button tone="paper" emphasis="nav" onClick={() => c.confirm()}>Keep all my counts</Button>
         </p>
       )}
       {low.length > 0 && (

@@ -4,6 +4,8 @@ import { productCostQuery, secretLairQuery, watchedQuery } from '../../app/queri
 import { useFeature } from '../../app/features';
 import { SortMenu } from '../../components/ArrangeControls';
 import { Button } from '../../components/Button';
+import { Pressable } from '../../components/controls/Pressable';
+import { Chevron } from '../../components/icons/Chevron';
 import { InfoTip } from '../../components/InfoTip';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
 import { EmptyNote, ErrorNote } from '../../components/States';
@@ -197,7 +199,7 @@ function DropTiles({ cost, state, basis }: { cost?: ProductCostOut; state?: Cost
   const { cards, named, possible } = splitBonus(cost.lines);
   const group = (title: string | null, lines: typeof cards) => lines.length > 0 && (
     <section key={title ?? 'cards'} aria-label={title ?? 'Guaranteed cards'} className="flex flex-col gap-1.5">
-      {title && <h4 className="text-xs voice-semi font-medium uppercase tracking-[0.06em] text-ink-muted">{title}</h4>}
+      {title && <h4 className="text-xs voice-semi font-medium uppercase tracking-caps text-ink-muted">{title}</h4>}
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(7rem,1fr))]">
         {lines.map((l) => <CardTile key={`${l.scryfall_id}|${l.finish}`} card={fromCostLine(l, basis)} selected={NO_MARKS.has(l.scryfall_id)} onToggle={noToggle} />)}
       </div>
@@ -223,20 +225,19 @@ function DropRow({ r, cost, state, basis, watching, selected, onPick }: { r: Sld
       >
         <th scope="row" className="py-2 pr-3 text-left font-normal">
           <span className="flex items-start gap-1">
-            <button
-              type="button"
+            <Pressable
               aria-expanded={open}
               aria-controls={tilesId}
               onClick={() => setOpen((o) => !o)}
-              className="touch-hit -ml-1 grid size-6 shrink-0 cursor-pointer place-items-center text-ink-muted hover:text-ink"
+              className="touch-hit -ml-1 grid size-6 shrink-0 place-items-center text-ink-muted hover:text-ink"
             >
-              <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+              <Chevron dir={open ? 'down' : 'right'} className="size-icon-sm" />
               <span className="sr-only">{open ? 'Hide cards' : 'Show cards'}</span>
-            </button>
+            </Pressable>
             <span className="min-w-0">
-              <button type="button" data-drop onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 cursor-pointer text-left text-md voice-semi font-medium text-ink md:min-h-0">
+              <Pressable data-drop onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 text-md voice-semi font-medium text-ink md:min-h-0">
                 <span className={selected ? 'highlighter' : ''}>{r.name}</span>
-              </button>
+              </Pressable>
               <span className="block text-xs text-ink-muted">
                 {[r.release_date, r.otherEdition && (r.finish === 'foil' ? 'foil only' : 'regular only')].filter(Boolean).join(' · ')}
                 {cost?.preorder && <span className="ml-1.5">· preorder</span>}

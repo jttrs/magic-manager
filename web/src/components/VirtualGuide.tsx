@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Chevron } from './Chevron';
+import { Chevron } from './icons/Chevron';
+import { Pressable } from './controls/Pressable';
 import type { GuideCard, GuideGroup } from '../core/guideCard';
 import { CardRow } from './CardRow';
 import { CardInspector } from './CardInspector';
@@ -177,20 +178,19 @@ function SectionHead({ row, first = false, onToggle, onPrev, onNext }: { row: He
     >
       <div className="min-w-0">
         <H className="m-0">
-          <button
-            type="button"
+          <Pressable
             aria-expanded={!collapsed}
             onClick={onToggle}
-            className={`group flex cursor-pointer items-center gap-1.5 text-left ${top ? 'text-2xl voice-condensed font-bold uppercase leading-none text-ink' : 'text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted hover:text-ink'}`}
+            className={`group flex items-center gap-1.5 ${top ? 'text-2xl voice-condensed font-bold uppercase leading-none' : 'text-sm voice-condensed font-medium uppercase tracking-caps hover:text-ink'}`}
           >
-            <Chevron dir={collapsed ? 'right' : 'down'} className={`shrink-0 text-ink-muted transition-transform group-hover:text-ink ${top ? 'size-5' : 'size-4'}`} />
+            <Chevron dir={collapsed ? 'right' : 'down'} className={`shrink-0 text-ink-muted transition-transform group-hover:text-ink ${top ? 'size-5' : 'size-icon-sm'}`} />
             {s.label}
-          </button>
+          </Pressable>
         </H>
       </div>
       {s.detail}
       <span className={`ml-auto tabular ${top ? 'text-sm text-ink-muted' : 'text-sm'}`}>{s.meta ?? s.items.length}</span>
-      <span className="flex shrink-0 items-center">
+      <span className="flex shrink-0 items-center text-ink-muted">
         <JumpButton dir="up" label={`Previous ${noun}`} onClick={onPrev} />
         <JumpButton dir="down" label={`Next ${noun}`} onClick={onNext} />
       </span>
@@ -200,15 +200,14 @@ function SectionHead({ row, first = false, onToggle, onPrev, onNext }: { row: He
 
 function JumpButton({ dir, label, onClick }: { dir: 'up' | 'down'; label: string; onClick?: () => void }) {
   return (
-    <button
-      type="button"
+    <Pressable
       aria-label={label}
       title={label}
       disabled={!onClick}
       onClick={onClick}
-      className="touch-hit grid size-7 cursor-pointer place-items-center rounded-sm text-ink-muted hover:bg-paper-sunk hover:text-ink disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+      className="touch-hit grid size-7 place-items-center rounded-sm hover:bg-paper-sunk hover:text-ink disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
     >
-      <Chevron dir={dir} className="size-4" />
-    </button>
+      <Chevron dir={dir} className="size-icon-sm" />
+    </Pressable>
   );
 }

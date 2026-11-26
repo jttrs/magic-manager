@@ -5,6 +5,7 @@ import { useSelection } from '../../app/selection';
 import { ViewLayout } from '../../components/AppShell';
 import { CardArt } from '../../components/CardFace';
 import { CardInspector } from '../../components/CardInspector';
+import { Pressable } from '../../components/controls/Pressable';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
 import { ViewToggle } from '../../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
@@ -106,14 +107,14 @@ function EarmarkList({ rows, onInspect }: { rows: EarmarkEntryOut[]; onInspect: 
               <tr key={m.oracle_id} className="border-b border-rule/60">
                 <td className="hidden py-1 @[22rem]:table-cell">
                   {c && (
-                    <button type="button" onClick={() => onInspect(c)} aria-label={`Inspect ${m.name}`} className="block size-[var(--size-thumb)] cursor-pointer overflow-hidden rounded-xs">
+                    <Pressable onClick={() => onInspect(c)} aria-label={`Inspect ${m.name}`} className="block size-[var(--size-thumb)] overflow-hidden rounded-xs">
                       <CardArt card={c} crop />
-                    </button>
+                    </Pressable>
                   )}
                 </td>
                 <th scope="row" className="py-1 pl-1 text-left font-normal">
                   {c ? (
-                    <button type="button" onClick={() => onInspect(c)} className="cursor-pointer text-left voice-semi text-ink hover:underline">{m.name}</button>
+                    <Pressable onClick={() => onInspect(c)} className="voice-semi text-ink hover:underline">{m.name}</Pressable>
                   ) : (
                     <span className="voice-semi text-ink">{m.name}</span>
                   )}

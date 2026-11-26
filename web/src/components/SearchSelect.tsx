@@ -1,4 +1,5 @@
 import { Popover } from 'radix-ui';
+import { CaretMark } from './icons/marks';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 type Option = { value: string; label: string; hint?: string };
@@ -42,17 +43,17 @@ export function SearchSelect({ label, options, value, onChange, noun, nouns = `$
       <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(''); else setActive(Math.max(0, options.findIndex((x) => x.value === value))); }}>
         <Popover.Trigger
           aria-labelledby={`${id}-l ${id}-s`}
-          className={`flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border px-2.5 text-left text-md transition-colors ease-guide data-[state=open]:border-accent pointer-coarse:min-h-11 ${paper ? 'border-rule-strong bg-paper text-ink hover:border-ink-muted sm:min-w-[15rem]' : 'border-chrome-line bg-chrome-raised text-on-chrome hover:border-on-chrome-muted'}`}
+          className={`flex min-h-control w-full cursor-pointer items-center gap-2 rounded-sm border px-2.5 text-left text-md transition-colors ease-guide data-[state=open]:border-accent pointer-coarse:min-h-control-coarse ${paper ? 'border-rule-strong bg-paper text-ink hover:border-ink-muted sm:min-w-[15rem]' : 'border-chrome-line bg-chrome-raised text-on-chrome hover:border-on-chrome-muted'}`}
         >
           <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${current ? '' : paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`}>{current?.label ?? `Choose a ${noun}…`}</span>
-          <span aria-hidden="true" className={paper ? 'text-ink-muted' : 'text-on-chrome-muted'}>▾</span>
+          <CaretMark className={`size-icon-sm ${paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`} />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
             align="start"
             sideOffset={4}
             collisionPadding={12}
-            className={`${paper ? 'z-[60]' : 'z-50'} flex max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]`}
+            className={`${paper ? 'z-[60]' : 'z-50'} flex max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-popover`}
           >
             <div className="border-b border-chrome-line p-2">
               <input

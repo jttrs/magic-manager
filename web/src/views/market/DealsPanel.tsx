@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Button } from '../../components/Button';
+import { Pressable } from '../../components/controls/Pressable';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
 import { CompanionRequired } from '../../components/companion/CompanionRequired';
 import { EmptyNote, ErrorNote } from '../../components/States';
@@ -53,7 +54,7 @@ export function DealsPanel({ data, costs, reads, search, set }: { data: DealsDat
       {met.length > 0 && (
         <TargetsMet met={met} products={data.products} onPick={(item) => set({ item })} onDismiss={() => setDismissedMet(reads.newlyMet)} />
       )}
-      {shared.map((e) => <p key={e} role="alert" className="max-w-[70ch] text-md leading-relaxed text-ink">{e}</p>)}
+      {shared.map((e) => <p key={e} role="alert" className="max-w-measure-wide text-md leading-relaxed text-ink">{e}</p>)}
       {!reads.busy && reads.inBrowser && reads.browserReads > 0 && (
         <p className="text-sm text-ink-muted">Open-tab stores are read in this browser by the companion</p>
       )}
@@ -104,7 +105,7 @@ function TargetsMet({ met, products, onPick, onDismiss }: { met: NewlyMet[]; pro
           return (
             <li key={m.product_id} className="flex flex-wrap items-baseline gap-x-2 border-b border-rule/60 py-1.5 text-sm tabular last:border-b-0">
               {key ? (
-                <button type="button" onClick={() => onPick(key)} className="touch-hit cursor-pointer text-left voice-semi font-medium text-accent-ink underline">{m.name}</button>
+                <Pressable onClick={() => onPick(key)} className="touch-hit voice-semi font-medium text-accent-ink underline">{m.name}</Pressable>
               ) : <span className="voice-semi font-medium text-ink">{m.name}</span>}
               <span className="text-ink">{fmtUsd(m.price)}</span>
               <a href={m.url} target="_blank" rel="noreferrer" className="touch-hit text-ink-muted hover:text-accent-ink">

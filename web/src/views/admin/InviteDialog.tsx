@@ -3,6 +3,8 @@ import { Dialog } from 'radix-ui';
 import { useState, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
+import { TextInput } from '../../components/controls/TextField';
+import { dialogContentClass, dialogOverlayClass, dialogTitleClass } from '../../components/controls/surfaces';
 import { CopyButton } from '../../components/CopyButton';
 import { SettingsChoice, SettingsRow } from '../../components/settings/SettingsControls';
 import { adminInvite } from '../../core/api';
@@ -17,8 +19,8 @@ export function InviteDialog({ trigger }: { trigger: ReactNode }) {
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[min(32rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('sm')}>
           {open && <Invite onDone={() => setOpen(false)} />}
         </Dialog.Content>
       </Dialog.Portal>
@@ -37,7 +39,7 @@ function Invite({ onDone }: { onDone: () => void }) {
 
   return (
     <>
-      <Dialog.Title className="border-b-2 border-rule-strong pb-2 text-2xl voice-condensed font-bold leading-none">Invite someone</Dialog.Title>
+      <Dialog.Title className={dialogTitleClass}>Invite someone</Dialog.Title>
       {!inv ? (
         <>
           <Dialog.Description className="text-md leading-relaxed text-ink-muted">
@@ -68,11 +70,11 @@ function Invite({ onDone }: { onDone: () => void }) {
           </Dialog.Description>
           <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
             Invite link
-            <input
+            <TextInput
+              tone="paper"
               readOnly
               value={link}
               onFocus={(e) => e.currentTarget.select()}
-              className="min-h-10 w-full rounded-xs border border-rule-strong bg-paper-raised px-2 text-md tabular text-ink"
             />
           </label>
           <div className="flex flex-wrap items-start justify-end gap-2">

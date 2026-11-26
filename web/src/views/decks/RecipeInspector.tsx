@@ -3,13 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { recipeQuery } from '../../app/queries';
 import { useJob } from '../../app/useJob';
 import { useSelection } from '../../app/selection';
-import { Chevron } from '../../components/Chevron';
+import { Button } from '../../components/Button';
+import { Pressable } from '../../components/controls/Pressable';
+import { Chevron } from '../../components/icons/Chevron';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { IconAction } from '../../components/IconAction';
 import { InfoTip } from '../../components/InfoTip';
 import { ProgressRule } from '../../components/ProgressRule';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../../components/States';
-import { AddCardMark } from '../../components/StoreMarks';
+import { AddCardMark } from '../../components/icons/marks';
 import { VirtualGuide } from '../../components/VirtualGuide';
 import { colorLabel, deckGuideGroups, isJumpstart, ownershipLabel, readiness } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
@@ -75,9 +77,9 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
     <section aria-labelledby="recipe-h" className="flex h-full min-h-0 flex-col">
       <header className="mx-sheet flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
-          <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
+          <Pressable onClick={onBack} className="inline-flex w-full items-center gap-0.5 text-sm voice-semi text-accent-ink">
             <Chevron dir="left" className="size-3.5" /> All recipes
-          </button>
+          </Pressable>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
           <div className="min-w-0">
@@ -98,9 +100,9 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
               disabledReason={adding ? 'Adding…' : 'Its card list hasn’t been read yet'}
             />
             {onView && (
-              <button type="button" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="cursor-pointer px-2 text-ink-muted underline hover:text-ink">
+              <Button tone="paper" emphasis="link" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="px-2">
                 {view === 'grid' ? 'List view' : 'Grid view'}
-              </button>
+              </Button>
             )}
           </span>
         </div>
@@ -130,7 +132,7 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
             <EmptyNote title="No cards">This recipe’s card list is empty.</EmptyNote>
           )
         ) : (
-          <div className="mx-auto mt-[12vh] flex max-w-[52ch] flex-col gap-3 px-6">
+          <div className="mx-auto mt-[12vh] flex max-w-measure-narrow flex-col gap-3 px-6">
             {readError ? (
               <ErrorNote error={new Error(readError)} onRetry={startRead} />
             ) : (
@@ -161,7 +163,7 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
 function Fact({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-baseline gap-1.5">
-      <dt className="text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted">{label}</dt>
+      <dt className="text-xs voice-semi uppercase tracking-caps text-ink-muted">{label}</dt>
       <dd className={strong ? 'voice-semi font-medium text-accent-ink' : 'text-ink'}>{value}</dd>
     </div>
   );

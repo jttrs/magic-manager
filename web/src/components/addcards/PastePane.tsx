@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { unwrap } from '../../app/queries';
 import { ingestResolve, type ResolveOut } from '../../core/api';
 import { Button } from '../Button';
+import { SelectInput, TextArea } from '../controls/Select';
 
 const FORMATS = [
   { value: 'auto', label: 'Detect' },
@@ -44,21 +45,20 @@ export function PastePane({ text, onText, onResolved }: { text: string; onText: 
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <label className="flex min-h-0 flex-1 flex-col gap-1.5 text-sm voice-semi text-ink-muted">
         Card list
-        <textarea
+        <TextArea
           autoFocus
           value={text}
           onChange={(e) => onText(e.target.value)}
           placeholder={EXAMPLE}
           spellCheck={false}
-          className="min-h-56 flex-1 resize-none rounded-sm border border-rule-strong bg-paper-raised p-3 text-sm tabular leading-relaxed text-ink placeholder:text-ink-muted focus-visible:border-accent"
         />
       </label>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
           Format
-          <select value={format} onChange={(e) => setFormat(e.target.value as typeof format)} className="h-9 cursor-pointer rounded-sm border border-rule bg-paper-raised px-2 text-sm text-ink focus-visible:border-accent">
+          <SelectInput value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
             {FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
+          </SelectInput>
         </label>
         <Button tone="paper" emphasis="primary" onClick={read} disabled={busy} className="ml-auto">{busy ? 'Reading…' : 'Read list'}</Button>
       </div>

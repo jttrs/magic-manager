@@ -5,6 +5,7 @@ import { analyticsCatalogQuery, consentQuery, unwrap } from '../app/queries';
 import { analyticsForget, analyticsSetConsent, type ConsentOut } from '../core/api';
 import { fmtCount } from '../core/format';
 import { Button } from './Button';
+import { dialogContentClass, dialogOverlayClass } from './controls/surfaces';
 import { PRIVACY_LEAD } from './privacyCopy';
 
 /** Privacy, as a section of the Settings dialog: the two switches, what's
@@ -30,8 +31,8 @@ export function PrivacyPrompt() {
   return (
     <Dialog.Root open={!closed} onOpenChange={(o) => setClosed(!o)}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(44rem,calc(100dvh-1.5rem))] w-[min(32rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('sm', 'frame')}>
           <header className="flex items-start gap-3 border-b-2 border-rule-strong px-5 pb-2 pt-4">
             <div className="min-w-0 flex-1">
               <Dialog.Title className="text-2xl voice-condensed font-bold leading-none">Privacy</Dialog.Title>

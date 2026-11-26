@@ -1,4 +1,5 @@
 import { AlertDialog } from 'radix-ui';
+import { dialogContentClass, dialogOverlayClass, dialogTitleClass } from './controls/surfaces';
 import { useState, type ReactNode } from 'react';
 import { Button } from './Button';
 
@@ -36,9 +37,9 @@ export function ConfirmDialog({ open, onOpenChange, title, children, confirmLabe
   return (
     <AlertDialog.Root open={open} onOpenChange={(o) => { if (!busy) { setError(null); onOpenChange(o); } }}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <AlertDialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[min(30rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
-          <AlertDialog.Title className="border-b-2 border-rule-strong pb-2 text-2xl voice-condensed font-bold leading-none">{title}</AlertDialog.Title>
+        <AlertDialog.Overlay className={dialogOverlayClass} />
+        <AlertDialog.Content className={dialogContentClass('sm')}>
+          <AlertDialog.Title className={dialogTitleClass}>{title}</AlertDialog.Title>
           <AlertDialog.Description asChild>
             <div className="flex flex-col gap-3 text-md leading-relaxed">{children}</div>
           </AlertDialog.Description>

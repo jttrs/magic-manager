@@ -2,7 +2,8 @@ import { Popover } from 'radix-ui';
 import type { PrintingOut } from '../../core/api';
 import { fmtUsd } from '../../core/format';
 import { rarityLetter, treatmentLabels } from '../../core/guideCard';
-import { Chevron } from '../Chevron';
+import { Pressable } from '../controls/Pressable';
+import { Chevron } from '../icons/Chevron';
 
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
 
@@ -55,24 +56,23 @@ export function PrintingPicker({ name, candidates, value, onChange }: { name: st
               return (
                 <li key={c.scryfall_id}>
                   <Popover.Close asChild>
-                    <button
-                      type="button"
+                    <Pressable
                       onClick={() => onChange(c.scryfall_id)}
                       aria-pressed={on}
                       aria-label={`${printingLabel(c)}, ${fmtUsd(c.price_usd ?? c.price_usd_foil)}${ownedLabel(c) ? `, own ${ownedLabel(c)}` : ''}`}
-                      className={`flex w-full cursor-pointer flex-col gap-1 rounded-sm p-1 text-left transition-colors ease-guide hover:bg-paper-sunk ${on ? 'outline-2 outline-accent' : ''}`}
+                      className={`flex w-full flex-col gap-1 rounded-sm p-1 transition-colors ease-guide hover:bg-paper-sunk ${on ? 'outline-2 outline-accent' : ''}`}
                     >
                       {c.image_uri ? (
-                        <img src={c.image_uri} alt="" loading="lazy" decoding="async" className="aspect-[488/680] w-full rounded-[4.5%/3.2%] bg-paper-sunk" />
+                        <img src={c.image_uri} alt="" loading="lazy" decoding="async" className="aspect-card w-full rounded-card bg-paper-sunk" />
                       ) : (
-                        <span className="grid aspect-[488/680] w-full place-items-center rounded-sm bg-paper-sunk text-2xs text-ink-muted">{c.name}</span>
+                        <span className="grid aspect-card w-full place-items-center rounded-sm bg-paper-sunk text-2xs text-ink-muted">{c.name}</span>
                       )}
                       <span className="truncate text-2xs tabular text-ink">{printingLabel(c)}</span>
                       <span className="flex gap-2 text-2xs tabular text-ink-muted">
                         <span>{fmtUsd(c.price_usd ?? c.price_usd_foil)}</span>
                         <span className="ml-auto text-accent-ink">{ownedLabel(c)}</span>
                       </span>
-                    </button>
+                    </Pressable>
                   </Popover.Close>
                 </li>
               );

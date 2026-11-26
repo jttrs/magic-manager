@@ -1,15 +1,22 @@
 import { DropdownMenu, ToggleGroup } from 'radix-ui';
 import { useId, type ReactNode } from 'react';
+import { RailField } from './controls/RailField';
+import { TextInput } from './controls/TextField';
+import { triggerClass } from './controls/fieldClass';
+import { menuItemClass, menuPanelClass } from './controls/surfaces';
+import { CaretMark, CheckMark } from './icons/marks';
 
-/** A rail section. `quiet` keeps its heading for screen readers only: the rail's
- *  search-then-filters order explains itself, so *Find* / *Show* print no label,
- *  while sections that switch to something else (*Buy*, Surfer's groups) do. */
+/** A rail section. Sections add no spacing of their own: the rail (`#view-controls`)
+ *  sets ONE gap between every control, and a printed heading adds one fixed space above
+ *  it — so the rhythm is the same in every rail. `quiet` keeps the heading for screen
+ *  readers only: the rail's search-then-filters order explains itself, so *Find* /
+ *  *Show* print no label, while sections that switch to something else do. */
 export function SideSection({ title, children, id, quiet = false }: { title: string; children: ReactNode; id?: string; quiet?: boolean }) {
   const own = useId();
   const hid = id ?? own;
   return (
-    <section aria-labelledby={hid} className={`flex flex-col gap-2 ${quiet ? '' : 'mt-2'}`}>
-      <h2 id={hid} className={quiet ? 'sr-only' : 'text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted'}>{title}</h2>
+    <section aria-labelledby={hid} className="contents">
+      <h2 id={hid} className={quiet ? 'sr-only' : 'pt-2 text-sm voice-condensed uppercase tracking-caps text-on-chrome-muted'}>{title}</h2>
       {children}
     </section>
   );
@@ -17,8 +24,13 @@ export function SideSection({ title, children, id, quiet = false }: { title: str
 
 type Opt<T extends string> = { value: T; label: string; disabled?: boolean; title?: string };
 
-/** Single-choice segmented control (view type, chase mode). `showLabel` prints the label above it. */
-/** `wrap` lays long labels out two to a row so they stay whole in the narrow sidebar. */
+const SEGMENTS = 'grid min-h-control pointer-coarse:min-h-control-coarse min-w-0 rounded-sm border border-chrome-line p-0.5';
+const SEGMENT =
+  'flex min-h-7 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xs px-1.5 text-sm voice-semi text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome ' +
+  'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-on-chrome-muted data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent';
+
+/** Single-choice segmented control (view type, chase mode). `showLabel` prints the label above it.
+ *  `wrap` lays long labels out two to a row so they stay whole in the narrow sidebar. */
 export function Segmented<T extends string>({ value, options, onChange, label, showLabel = false, labelExtra, wrap = false }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string; showLabel?: boolean; labelExtra?: ReactNode; wrap?: boolean }) {
   const id = useId();
   const group = (
@@ -27,31 +39,16 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
       value={value}
       onValueChange={(v) => v && onChange(v as T)}
       {...(showLabel ? { 'aria-labelledby': id } : { 'aria-label': label })}
-      className={`grid min-w-0 rounded-sm border border-chrome-line p-0.5 ${wrap ? 'grid-cols-2' : 'auto-cols-fr grid-flow-col'}`}
+      className={`${SEGMENTS} ${wrap ? 'grid-cols-2' : 'auto-cols-fr grid-flow-col'}`}
     >
       {options.map((o) => (
-        <ToggleGroup.Item
-          key={o.value}
-          value={o.value}
-          disabled={o.disabled}
-          title={o.title}
-          className="min-h-8 pointer-coarse:min-h-11 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-on-chrome-muted data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
-        >
-          {o.label}
+        <ToggleGroup.Item key={o.value} value={o.value} disabled={o.disabled} title={o.title} className={SEGMENT}>
+          <span className="truncate">{o.label}</span>
         </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
   );
-  if (!showLabel) return group;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1.5">
-        <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
-        {labelExtra}
-      </span>
-      {group}
-    </div>
-  );
+  return showLabel ? <RailField label={label} labelId={id} extra={labelExtra}>{group}</RailField> : group;
 }
 
 /** Segmented look, toggle behavior: each segment switches on/off independently
@@ -64,33 +61,20 @@ export function SegmentedToggles<T extends string>({ value, options, onChange, l
       value={value}
       onValueChange={(v) => onChange(v as T[])}
       {...(showLabel ? { 'aria-labelledby': id } : { 'aria-label': label })}
-      className="grid min-w-0 auto-cols-fr grid-flow-col gap-0.5 rounded-sm border border-chrome-line p-0.5"
+      className={`${SEGMENTS} auto-cols-fr grid-flow-col gap-0.5`}
     >
       {options.map((o) => (
-        <ToggleGroup.Item
-          key={o.value}
-          value={o.value}
-          className="flex min-h-8 pointer-coarse:min-h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xs px-1.5 text-sm voice-semi text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
-        >
+        <ToggleGroup.Item key={o.value} value={o.value} className={SEGMENT}>
           <span className="truncate">{o.label}</span>
           {o.count != null && <span className="tabular text-xs opacity-75">{o.count}</span>}
         </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
   );
-  if (!showLabel) return group;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1.5">
-        <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
-        {labelExtra}
-      </span>
-      {group}
-    </div>
-  );
+  return showLabel ? <RailField label={label} labelId={id} extra={labelExtra}>{group}</RailField> : group;
 }
 
-/** Multi-select chips; "on" chips carry the highlighter. `showLabel` prints the label above. */
+/** Multi-select chips; "on" chips carry the accent. `showLabel` prints the label above. */
 export function ChipToggles<T extends string>({ value, options, onChange, label, showLabel = false }: { value: T[]; options: (Opt<T> & { count?: number })[]; onChange: (v: T[]) => void; label: string; showLabel?: boolean }) {
   const id = useId();
   const group = (
@@ -99,9 +83,9 @@ export function ChipToggles<T extends string>({ value, options, onChange, label,
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="inline-flex items-center gap-1.5 min-h-7 pointer-coarse:min-h-11 px-2.5 rounded-pill border border-chrome-line text-xs voice-semi text-on-chrome-muted cursor-pointer
-                     transition-[color,background-color,border-color] ease-guide hover:text-on-chrome hover:border-on-chrome-muted
-                     data-[state=on]:bg-accent data-[state=on]:border-accent data-[state=on]:text-on-accent"
+          className="inline-flex min-h-7 pointer-coarse:min-h-control-coarse cursor-pointer items-center gap-1.5 rounded-pill border border-chrome-line px-2.5 text-xs voice-semi text-on-chrome-muted
+                     transition-[color,background-color,border-color] ease-guide hover:border-on-chrome-muted hover:text-on-chrome
+                     data-[state=on]:border-accent data-[state=on]:bg-accent data-[state=on]:text-on-accent"
         >
           {o.label}
           {o.count != null && <span className="tabular opacity-75">{o.count}</span>}
@@ -109,65 +93,38 @@ export function ChipToggles<T extends string>({ value, options, onChange, label,
       ))}
     </ToggleGroup.Root>
   );
-  if (!showLabel) return group;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
-      {group}
-    </div>
-  );
+  return showLabel ? <RailField label={label} labelId={id}>{group}</RailField> : group;
 }
 
-export function TextField({ label, value, onChange, placeholder, name }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; name: string }) {
+/** A labelled search box for a rail. */
+export function TextField({ label, value, onChange, placeholder, name, labelExtra }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; name: string; labelExtra?: ReactNode }) {
+  const id = useId();
   return (
-    <label className="flex flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
-      {label}
-      <input
-        name={name}
-        type="search"
-        autoComplete="off"
-        spellCheck={false}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-h-9 pointer-coarse:min-h-11 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
-      />
-    </label>
+    <RailField label={label} htmlFor={id} extra={labelExtra}>
+      <TextInput id={id} name={name} type="search" autoComplete="off" spellCheck={false} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    </RailField>
   );
 }
 
 /** Single choice from a short list: a trigger matching MultiSelect's, opening a
  *  radio menu (Radix DropdownMenu — arrow keys, type-ahead, Escape). Optional counts. */
-export function SelectField<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: (Opt<T> & { count?: number })[]; onChange: (v: T) => void }) {
+export function SelectField<T extends string>({ label, value, options, onChange, labelExtra }: { label: string; value: T; options: (Opt<T> & { count?: number })[]; onChange: (v: T) => void; labelExtra?: ReactNode }) {
   const id = useId();
   const current = options.find((o) => o.value === value);
   return (
-    <div className="flex flex-col gap-1.5">
-      <span id={`${id}-l`} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+    <RailField label={label} labelId={`${id}-l`} extra={labelExtra}>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger
-          aria-labelledby={`${id}-l ${id}-s`}
-          className="flex min-h-9 pointer-coarse:min-h-11 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
-        >
+        <DropdownMenu.Trigger aria-labelledby={`${id}-l ${id}-s`} className={triggerClass('chrome')}>
           <span id={`${id}-s`} className="min-w-0 flex-1 truncate">{current?.label ?? value}</span>
-          <span aria-hidden="true" className="text-on-chrome-muted">▾</span>
+          <CaretMark className="size-icon-sm shrink-0 text-on-chrome-muted" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            align="start"
-            sideOffset={4}
-            collisionPadding={12}
-            className="z-50 w-[max(var(--radix-dropdown-menu-trigger-width),12rem)] rounded-sm border border-chrome-line bg-chrome-raised py-1 text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
-          >
+          <DropdownMenu.Content align="start" sideOffset={4} collisionPadding={12} className={`${menuPanelClass} w-[max(var(--radix-dropdown-menu-trigger-width),12rem)] py-1`}>
             <DropdownMenu.RadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
               {options.map((o) => (
-                <DropdownMenu.RadioItem
-                  key={o.value}
-                  value={o.value}
-                  className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm outline-none data-[highlighted]:bg-chrome-line data-[state=checked]:text-accent"
-                >
+                <DropdownMenu.RadioItem key={o.value} value={o.value} className={menuItemClass}>
                   <span aria-hidden="true" className="w-3 text-accent">
-                    <DropdownMenu.ItemIndicator>✓</DropdownMenu.ItemIndicator>
+                    <DropdownMenu.ItemIndicator><CheckMark className="size-icon-xs" /></DropdownMenu.ItemIndicator>
                   </span>
                   <span className="min-w-0 flex-1 truncate">{o.label}</span>
                   {o.count != null && <span className="tabular text-xs text-on-chrome-muted">{o.count}</span>}
@@ -177,24 +134,16 @@ export function SelectField<T extends string>({ label, value, options, onChange 
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-    </div>
+    </RailField>
   );
 }
 
 /** A calendar day (YYYY-MM-DD), cleared with the field's own clear control. */
 export function DateField({ label, value, onChange, name, min, max }: { label: string; value: string | undefined; onChange: (v: string | undefined) => void; name: string; min?: string; max?: string }) {
+  const id = useId();
   return (
-    <label className="flex min-w-0 flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
-      {label}
-      <input
-        name={name}
-        type="date"
-        value={value ?? ''}
-        min={min}
-        max={max}
-        onChange={(e) => onChange(e.target.value || undefined)}
-        className="min-h-9 pointer-coarse:min-h-11 min-w-0 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md tabular text-on-chrome [color-scheme:dark] focus-visible:border-accent"
-      />
-    </label>
+    <RailField label={label} htmlFor={id}>
+      <TextInput id={id} name={name} type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value || undefined)} />
+    </RailField>
   );
 }

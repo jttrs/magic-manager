@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useMemo, type SVGProps } from 'react';
+import { useMemo } from 'react';
 import { meQuery } from '../app/auth';
 import { adminUsersQuery, serverModeQuery } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { ViewLayout } from '../components/AppShell';
+import { ListRow } from '../components/controls/ListRow';
+import { InviteMark } from '../components/icons/marks';
 import { IconAction } from '../components/IconAction';
 import { Segmented, SideSection, TextField } from '../components/Sidebar';
 import { SplitPanes } from '../components/SplitPanes';
@@ -15,16 +17,6 @@ import { InviteDialog } from './admin/InviteDialog';
 import { UserInspector } from './admin/UserInspector';
 
 const route = getRouteApi('/admin');
-
-function InviteMark(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
-      <circle cx="9.5" cy="8" r="3.6" />
-      <path d="M2.8 20.2c.8-3.8 3.6-6 6.7-6s5.9 2.2 6.7 6" />
-      <path d="M18.6 6.6v6M15.6 9.6h6" />
-    </svg>
-  );
-}
 
 /** Hosted, admins only: who can sign in, invites, sign-outs, and per-person feature flags.
  *  Never anyone's collection (§25.0) — the server serves none of it here. */
@@ -82,16 +74,11 @@ export function AdminView() {
               const active = u.id === search.user;
               return (
                 <li key={u.id}>
-                  <button
-                    type="button"
-                    aria-current={active || undefined}
-                    onClick={() => set({ user: u.id })}
-                    className={`ruled flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`}
-                  >
+                  <ListRow active={active} onClick={() => set({ user: u.id })} className="py-2">
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="flex items-baseline gap-2">
                         <span className={`truncate text-md voice-semi font-medium ${u.disabled_at ? 'text-ink-muted line-through decoration-rule-strong' : ''}`}>{u.display_name}</span>
-                        <span className="shrink-0 text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted">{roleLabel(u)}</span>
+                        <span className="shrink-0 text-xs voice-semi uppercase tracking-caps text-ink-muted">{roleLabel(u)}</span>
                       </span>
                       <span className="truncate text-sm text-ink-muted">{u.email ?? 'No email shared'}</span>
                     </span>
@@ -99,7 +86,7 @@ export function AdminView() {
                       <span>{statusLabel(u)}</span>
                       <span>seen {seenLabel(u.last_seen_at)}</span>
                     </span>
-                  </button>
+                  </ListRow>
                 </li>
               );
             })}

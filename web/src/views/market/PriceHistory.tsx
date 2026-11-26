@@ -75,7 +75,7 @@ export function PriceHistory({ product: p, cost }: { product: DealProduct; cost?
           </table>
 
           <details className="group text-sm">
-            <summary className="touch-hit inline-flex min-h-9 cursor-pointer items-center text-accent-ink">All {chart.rows.length} readings</summary>
+            <summary className="touch-hit inline-flex min-h-control cursor-pointer items-center text-accent-ink">All {chart.rows.length} readings</summary>
             <table className="mt-1 w-full border-collapse tabular">
               <caption className="sr-only">Every price read, newest first</caption>
               <thead>

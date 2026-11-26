@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { OutLink } from '../../../components/CardInspector';
-import { ExploreMark, ScryfallMark, TcgplayerMark } from '../../../components/StoreMarks';
+import { Pressable } from '../../../components/controls/Pressable';
+import { ExploreMark, ScryfallMark, TcgplayerMark } from '../../../components/icons/marks';
 import type { SurfCardOut } from '../../../core/api';
 import { fmtUsd } from '../../../core/format';
 import { artists, ownedLine, tcgplayerSearch, printingLine, textFaces } from '../../../core/surf';
@@ -33,19 +34,18 @@ export function SurfCardEntry({ card, onTag, eager = false }: { card: SurfCardOu
             height={936}
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"
-            className="aspect-[488/680] h-auto w-[min(100%,calc((100dvh-19rem)*0.7176),30rem)] lg:w-[min(calc((100dvh-19rem)*0.7176),30rem,calc(100vw-var(--size-sidebar)-26rem))] rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_18px_40px_-22px_var(--theme-scrim)]"
+            className="aspect-card h-auto w-[min(100%,calc((100dvh-19rem)*0.7176),30rem)] lg:w-[min(calc((100dvh-19rem)*0.7176),30rem,calc(100vw-var(--size-sidebar)-26rem))] rounded-card bg-paper-sunk shadow-[0_18px_40px_-22px_var(--theme-scrim)]"
           />
         ) : (
-          <div className="grid aspect-[488/680] w-[min(100%,20rem)] place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{card.name}</div>
+          <div className="grid aspect-card w-[min(100%,20rem)] place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{card.name}</div>
         )}
         {faced.length > 1 && (
-          <button
-            type="button"
+          <Pressable
             onClick={() => setFace((f) => (f + 1) % faced.length)}
-            className="mt-2 inline-flex min-h-9 cursor-pointer items-center rounded-sm px-2 text-sm voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
+            className="mt-2 inline-flex min-h-control items-center rounded-sm px-2 text-sm voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
           >
             Turn over · {faced[(face + 1) % faced.length].name}
-          </button>
+          </Pressable>
         )}
       </div>
 
@@ -57,7 +57,7 @@ export function SurfCardEntry({ card, onTag, eager = false }: { card: SurfCardOu
               {f.type_line && <p className="mt-1.5 text-sm text-ink-muted">{f.type_line}</p>}
             </header>
             {f.flavor_text ? (
-              <p className="max-w-[46ch] whitespace-pre-line text-lg leading-relaxed text-ink text-pretty">{f.flavor_text}</p>
+              <p className="max-w-measure-narrow whitespace-pre-line text-lg leading-relaxed text-ink text-pretty">{f.flavor_text}</p>
             ) : (
               i === 0 && faces.length === 1 && <p className="text-sm text-ink-muted">No flavor text on this card.</p>
             )}
@@ -93,14 +93,13 @@ export function SurfCardEntry({ card, onTag, eager = false }: { card: SurfCardOu
             <ul aria-label={`Art tags of ${card.name}`} className="flex flex-wrap gap-1">
               {card.art_tags.map((t) => (
                 <li key={t.slug}>
-                  <button
-                    type="button"
+                  <Pressable
                     onClick={() => onTag(t.slug)}
                     title={`Surf cards with ${t.label} art`}
-                    className="min-h-7 cursor-pointer rounded-xs border border-rule px-1.5 text-xs text-ink-muted transition-colors duration-150 ease-guide hover:border-rule-strong hover:bg-paper-sunk hover:text-ink focus-visible:border-accent"
+                    className="min-h-7 rounded-xs border border-rule px-1.5 text-xs text-ink-muted transition-colors duration-150 ease-guide hover:border-rule-strong hover:bg-paper-sunk hover:text-ink focus-visible:border-accent"
                   >
                     {t.label}
-                  </button>
+                  </Pressable>
                 </li>
               ))}
             </ul>
@@ -124,9 +123,9 @@ export function SurfCardEntry({ card, onTag, eager = false }: { card: SurfCardOu
           <Link
             to="/explore"
             search={{ a: card.name.split(' // ')[0], mode: 'card' } as never}
-            className="-ml-2 inline-flex min-h-9 items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
+            className="-ml-2 inline-flex min-h-control items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
           >
-            <ExploreMark className="size-[1.15rem]" />
+            <ExploreMark className="size-icon-md" />
             Explore this card
           </Link>
         </nav>

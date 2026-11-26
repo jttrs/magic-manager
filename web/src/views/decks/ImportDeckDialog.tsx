@@ -9,6 +9,9 @@ import { useBrowserDeck } from '../../app/useBrowserDeck';
 import { DeckSourceHealth } from '../../components/DeckSourceHealth';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
 import { CompanionRequired } from '../../components/companion/CompanionRequired';
+import { Check } from '../../components/controls/Check';
+import { TextInput } from '../../components/controls/TextField';
+import { dialogContentClass, dialogOverlayClass, dialogTitleClass } from '../../components/controls/surfaces';
 import { deckImport, type ResolveOut } from '../../core/api';
 
 const DECK_URL = /^https?:\/\/([\w-]+\.)*(archidekt\.com|moxfield\.com|mtggoldfish\.com|manabox\.app|scryfall\.com)\//i;
@@ -92,26 +95,23 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
     }}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 w-[min(30rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('sm')}>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <Dialog.Title className="border-b-2 border-rule-strong pb-2 text-2xl voice-condensed font-bold leading-none">Import a deck</Dialog.Title>
+            <Dialog.Title className={dialogTitleClass}>Import a deck</Dialog.Title>
             <Dialog.Description className="text-md leading-relaxed">Saves the decklist to Decks. It isn’t marked built — build it from your cards whenever you assemble it.</Dialog.Description>
             <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
               Deck link — Archidekt, Moxfield, MTGGoldfish, ManaBox or Scryfall
-              <input
+              <TextInput
+                tone="paper"
                 autoFocus
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://archidekt.com/decks/…"
-                className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
               />
             </label>
-            <label className="inline-flex cursor-pointer items-start gap-2 text-md">
-              <input type="checkbox" checked={haveCards} onChange={(e) => { haveCardsRef.current = e.target.checked; setHaveCards(e.target.checked); }} className="mt-1 accent-[var(--theme-accent)]" />
-              <span>Also add these cards to my collection <span className="block text-sm text-ink-muted">You’ll review the printings before anything is added.</span></span>
-            </label>
+            <Check checked={haveCards} onChange={(c) => { haveCardsRef.current = c; setHaveCards(c); }} hint="You’ll review the printings before anything is added.">Also add these cards to my collection</Check>
             <DeckSourceHealth url={url} viaBrowser={browser.handles(url)} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
             {blocked && <CompanionRequired what="Moxfield decks" />}
             {url.includes('moxfield') && !blocked && (

@@ -32,7 +32,7 @@ export function SortRulesEditor<K extends string>({ keys, rules, presets, onChan
   return (
     <>
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Sort by, in order</h2>
+        <h2 className="text-sm voice-condensed uppercase tracking-caps text-on-chrome-muted">Sort by, in order</h2>
         {rules.length > 0 && (
           <button type="button" onClick={() => onChange([])} className="cursor-pointer text-xs text-on-chrome-muted underline hover:text-on-chrome">Clear</button>
         )}
@@ -74,7 +74,7 @@ export function SortRulesEditor<K extends string>({ keys, rules, presets, onChan
         </label>
       )}
       <div className="flex flex-col gap-1.5 border-t border-chrome-line pt-2">
-        <span className="text-xs voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Presets</span>
+        <span className="text-xs voice-condensed uppercase tracking-caps text-on-chrome-muted">Presets</span>
         <div className="flex flex-wrap gap-1.5">
           {presets.map((p) => (
             <button
@@ -149,7 +149,7 @@ function RuleRow({ index, count, label, dir, onDir, onRemove, onMove, onDropAt }
       className={`relative flex items-center gap-1 rounded-xs border border-chrome-line bg-chrome px-1 py-0.5 ${dragging ? 'opacity-40' : ''}`}
     >
       {edge && (
-        <span aria-hidden="true" className={`pointer-events-none absolute inset-x-0 h-0.5 rounded-pill bg-accent ${edge === 'top' ? '-top-[3px]' : '-bottom-[3px]'}`} />
+        <span aria-hidden="true" className={`pointer-events-none absolute inset-x-0 h-0.5 rounded-pill bg-accent ${edge === 'top' ? '-top-bar' : '-bottom-bar'}`} />
       )}
       <span ref={handle} aria-hidden="true" className="cursor-grab select-none px-1 text-on-chrome-muted active:cursor-grabbing" title="Drag to reorder">⋮⋮</span>
       <span className="w-4 shrink-0 tabular text-xs text-on-chrome-muted">{index + 1}</span>

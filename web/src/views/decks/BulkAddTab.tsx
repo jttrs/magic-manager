@@ -35,7 +35,7 @@ export function BulkAddTab({ state, onState, onEdit }: { state: BulkState; onSta
           <Review title={readTitle(read.lines)} warnings={read.warnings} back={{ label: 'Edit list', onClick: () => onState((s) => ({ ...s, read: null })) }}>
             {groups.map(([board, lines]) => (
               <section key={board} aria-label={BOARD_LABEL[board]}>
-                {groups.length > 1 && <h4 className="mt-3 text-sm voice-condensed font-bold uppercase tracking-[0.04em] text-ink-muted">{BOARD_LABEL[board]}</h4>}
+                {groups.length > 1 && <h4 className="mt-3 text-sm voice-condensed font-bold uppercase tracking-caps-tight text-ink-muted">{BOARD_LABEL[board]}</h4>}
                 <ReviewTable label={`${BOARD_LABEL[board]} cards`} lines={lines} onChange={(k, p) => setLines((ls) => updateLine(ls, k, p))} onRemove={(k) => setLines((ls) => ls.filter((l) => l.key !== k))} />
               </section>
             ))}

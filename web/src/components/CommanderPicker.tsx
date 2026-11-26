@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Popover } from 'radix-ui';
 import { useId, useState, type KeyboardEvent } from 'react';
+import { TextInput } from './controls/TextField';
 import { cardSearchQuery, commanderSearchQuery } from '../app/queries';
 
 export type PickedCard = { name: string; commander_eligible?: boolean };
@@ -58,7 +59,7 @@ export function CommanderPicker({ label, value = '', onCommit, name, scope = 'co
     <Popover.Root open={open && options.length > 0} onOpenChange={setOpen}>
       <label htmlFor={id} className="text-sm voice-semi text-on-chrome-muted">{label}</label>
       <Popover.Anchor asChild>
-        <input
+        <TextInput
           id={id}
           name={name}
           role="combobox"
@@ -78,7 +79,6 @@ export function CommanderPicker({ label, value = '', onCommit, name, scope = 'co
           onFocus={() => text.length >= 2 && setOpen(true)}
           onBlur={() => window.setTimeout(() => commit(text), 120)}
           onKeyDown={onKey}
-          className="min-h-10 w-full rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-lg voice-condensed text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
         />
       </Popover.Anchor>
       <Popover.Portal>
@@ -86,7 +86,7 @@ export function CommanderPicker({ label, value = '', onCommit, name, scope = 'co
           align="start"
           sideOffset={4}
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="z-50 max-h-80 w-[var(--radix-popover-trigger-width)] min-w-64 overflow-y-auto overscroll-contain rounded-sm border border-chrome-line bg-chrome-raised py-1 shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+          className="z-50 max-h-80 w-[var(--radix-popover-trigger-width)] min-w-64 overflow-y-auto overscroll-contain rounded-sm border border-chrome-line bg-chrome-raised py-1 shadow-popover"
         >
           <ul id={listId} role="listbox" aria-label={`${label} suggestions`}>
             {options.map((o, i) => (
@@ -101,7 +101,7 @@ export function CommanderPicker({ label, value = '', onCommit, name, scope = 'co
                 className="flex cursor-pointer items-baseline gap-2 px-3 py-1.5 text-md text-on-chrome aria-selected:bg-chrome-line"
               >
                 <span className="min-w-0 truncate voice-semi">{o.name}</span>
-                <span className="ml-auto shrink-0 text-2xs uppercase tracking-[0.06em] text-on-chrome-muted" translate="no">
+                <span className="ml-auto shrink-0 text-2xs uppercase tracking-caps text-on-chrome-muted" translate="no">
                   {o.color_identity.join('') || 'C'}
                   {o.cached ? ' · cached' : ''}
                 </span>

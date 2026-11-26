@@ -4,6 +4,8 @@ import { useState, type ReactNode } from 'react';
 import { purchaseStoresQuery, purchasesQuery, unwrap } from '../../app/queries';
 import { useCompanion } from '../../app/useCompanion';
 import { Button } from '../../components/Button';
+import { Check } from '../../components/controls/Check';
+import { dialogContentClass, dialogOverlayClass } from '../../components/controls/surfaces';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
 import { reportScraperFailure, useDownScrapers } from '../../app/scraperHealth';
 import { ordersKey } from '../../core/scraperHealth';
@@ -16,7 +18,7 @@ import { VerificationMark } from './StoreVerification';
 const STORE_NAME: Record<Store, string> = { manapool: 'Mana Pool', tcgplayer: 'TCGplayer', cardkingdom: 'Card Kingdom' };
 const STORE_ORDER: Store[] = ['manapool', 'tcgplayer', 'cardkingdom'];
 const BATCH = 100;
-const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-[0.04em] text-ink';
+const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-caps-tight text-ink';
 const DAY = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
 const orderDay = (at: string) => {
   const d = new Date(at);
@@ -33,8 +35,8 @@ export function ReadOrdersDialog({ trigger, onReview }: { trigger: ReactNode; on
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(48rem,calc(100dvh-1.5rem))] w-[min(46rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('lg', 'frame')}>
           {open && <ReadOrders onClose={() => setOpen(false)} onReview={(id) => { setOpen(false); onReview(id); }} />}
         </Dialog.Content>
       </Dialog.Portal>
@@ -148,23 +150,24 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
               {STORE_ORDER.map((s) => {
                 const ok = allowed(s);
                 return (
-                  <label key={s} className={`ruled flex cursor-pointer items-start gap-3 px-1 py-2 ${ok ? '' : 'opacity-70'}`}>
-                    <input type="radio" name="store" value={s} checked={store === s} onChange={() => setStore(s)} className="mt-1 accent-accent" />
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="flex flex-wrap items-center gap-x-3">
-                        <span className="text-md voice-semi font-medium text-ink">{STORE_NAME[s]}</span>
-                        <VerificationMark store={info(s)} />
+                  <div key={s} className={`ruled px-1 py-2 ${ok ? '' : 'opacity-70'}`}>
+                    <Check type="radio" name="store" value={s} checked={store === s} onChange={() => setStore(s)}>
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span className="flex flex-wrap items-center gap-x-3">
+                          <span className="text-md voice-semi font-medium text-ink">{STORE_NAME[s]}</span>
+                          <VerificationMark store={info(s)} />
+                        </span>
+                        {info(s) && <span className="max-w-measure-body text-xs leading-snug text-ink-muted">{info(s)!.note}</span>}
+                        {!ok && c.status === 'ready' && <span className="text-xs text-ink">To read {STORE_NAME[s]} orders: {ALLOW_ACCESS_HINT}</span>}
                       </span>
-                      {info(s) && <span className="max-w-[62ch] text-xs leading-snug text-ink-muted">{info(s)!.note}</span>}
-                      {!ok && c.status === 'ready' && <span className="text-xs text-ink">To read {STORE_NAME[s]} orders: {ALLOW_ACCESS_HINT}</span>}
-                    </span>
-                  </label>
+                    </Check>
+                  </div>
                 );
               })}
             </fieldset>
             <section aria-labelledby="ro-read" className="flex flex-col gap-2">
               <h3 id="ro-read" className={H3}>2. Read the order list</h3>
-              <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+              <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">
                 {c.status === 'ready'
                   ? `Reads the list of your ${STORE_NAME[store]} orders — dates and totals only. You then choose which orders to read in full.`
                   : c.status === 'checking'
@@ -175,7 +178,7 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
                 {readList.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Reading your orders…') : 'Read order list'}
               </Button>
               {down && (
-                <p role="status" className="max-w-[62ch] text-md leading-relaxed text-ink">
+                <p role="status" className="max-w-measure-body text-md leading-relaxed text-ink">
                   Reading {STORE_NAME[store]} orders is temporarily down{down.message ? `: ${down.message}` : '.'}
                 </p>
               )}
@@ -197,22 +200,25 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
             ) : (
               <>
                 <div className="flex flex-wrap gap-3 text-sm">
-                  <button type="button" disabled={busy} onClick={() => setPicked(new Set(unread))} className="cursor-pointer text-accent-ink underline underline-offset-2 disabled:opacity-45">Select unread</button>
-                  <button type="button" disabled={busy} onClick={() => setPicked(new Set(orders.map((o) => o.order_id)))} className="cursor-pointer text-accent-ink underline underline-offset-2 disabled:opacity-45">Select all</button>
-                  <button type="button" disabled={busy} onClick={() => setPicked(new Set())} className="cursor-pointer text-ink-muted underline underline-offset-2 disabled:opacity-45">Select none</button>
+                  <Button tone="paper" emphasis="nav" disabled={busy} onClick={() => setPicked(new Set(unread))}>Select unread</Button>
+                  <Button tone="paper" emphasis="nav" disabled={busy} onClick={() => setPicked(new Set(orders.map((o) => o.order_id)))}>Select all</Button>
+                  <Button tone="paper" emphasis="link" disabled={busy} onClick={() => setPicked(new Set())}>Select none</Button>
                 </div>
                 <ul className="flex flex-col">
                   {orders.map((o) => {
                     const st = statusOf(o.order_id);
                     return (
                       <li key={o.order_id}>
-                        <label className="ruled flex cursor-pointer items-center gap-3 px-1 py-1.5 text-sm">
-                          <input type="checkbox" checked={picked.has(o.order_id)} onChange={() => toggle(o.order_id)} disabled={busy} className="accent-accent" />
-                          <span className="w-28 shrink-0 text-xs tabular text-ink-muted">{orderDay(o.ordered_at)}</span>
-                          <span className="min-w-0 flex-1 truncate text-ink">Order #{o.order_id}</span>
-                          <span className={`shrink-0 text-xs ${st === 'unread' ? 'text-ink-muted' : 'voice-semi text-ink'}`}>{st === 'unread' ? 'Not read yet' : `Read · ${STATUS_LABEL[st]}`}</span>
-                          <span className="w-20 shrink-0 text-right tabular text-ink">{fmtUsd(o.total)}</span>
-                        </label>
+                        <div className="ruled flex px-1 py-1.5 text-sm [&>label]:flex-1 [&>label>span]:flex-1">
+                          <Check checked={picked.has(o.order_id)} onChange={() => toggle(o.order_id)} disabled={busy}>
+                            <span className="flex items-center gap-3">
+                              <span className="w-28 shrink-0 text-xs tabular text-ink-muted">{orderDay(o.ordered_at)}</span>
+                              <span className="min-w-0 flex-1 truncate text-ink">Order #{o.order_id}</span>
+                              <span className={`shrink-0 text-xs ${st === 'unread' ? 'text-ink-muted' : 'voice-semi text-ink'}`}>{st === 'unread' ? 'Not read yet' : `Read · ${STATUS_LABEL[st]}`}</span>
+                              <span className="w-20 shrink-0 text-right tabular text-ink">{fmtUsd(o.total)}</span>
+                            </span>
+                          </Check>
+                        </div>
                       </li>
                     );
                   })}

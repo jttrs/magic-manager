@@ -1,5 +1,6 @@
 import { ToggleGroup } from 'radix-ui';
 import { useId, type ReactNode } from 'react';
+import { Check } from '../controls/Check';
 
 /** One preference in the Settings dialog: its name and a plain sentence on the
  *  left, the control on the right (stacked on phones). `control` receives the
@@ -46,7 +47,7 @@ export function SettingsChoice<T extends string>({ value, options, onChange, lab
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="min-h-9 min-w-0 cursor-pointer truncate rounded-xs px-3 text-sm voice-semi text-ink-muted transition-colors ease-guide pointer-coarse:min-h-11 hover:text-ink data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+          className="min-h-control min-w-0 cursor-pointer truncate rounded-xs px-3 text-sm voice-semi text-ink-muted transition-colors ease-guide pointer-coarse:min-h-control-coarse hover:text-ink data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           {o.label}
         </ToggleGroup.Item>
@@ -73,12 +74,10 @@ export function SettingsMultiChoice<T extends string>({ value, options, onChange
       <div role="group" aria-labelledby={labelId} aria-describedby={descriptionId} className="grid min-w-0 gap-x-4 sm:min-w-[15rem] sm:grid-cols-2">
         {options.map((o) => (
           <label key={o.value} className="flex min-h-8 cursor-pointer items-center gap-2 text-sm text-ink pointer-coarse:min-h-11 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-ink-muted">
-            <input
-              type="checkbox"
+            <Check
               checked={on.has(o.value)}
               disabled={disabledValues.includes(o.value)}
               onChange={() => toggle(o.value)}
-              className="h-3.5 w-3.5 shrink-0 accent-[var(--theme-accent)]"
             />
             {o.label}
           </label>
@@ -100,7 +99,7 @@ export function SettingsMultiChoice<T extends string>({ value, options, onChange
           key={o.value}
           value={o.value}
           disabled={disabledValues.includes(o.value)}
-          className="min-h-9 min-w-0 cursor-pointer truncate rounded-xs px-3 text-sm voice-semi text-ink-muted transition-colors ease-guide pointer-coarse:min-h-11 hover:text-ink data-[disabled]:cursor-not-allowed data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+          className="min-h-control min-w-0 cursor-pointer truncate rounded-xs px-3 text-sm voice-semi text-ink-muted transition-colors ease-guide pointer-coarse:min-h-control-coarse hover:text-ink data-[disabled]:cursor-not-allowed data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           {o.label}
         </ToggleGroup.Item>
@@ -114,7 +113,7 @@ export function SettingsGroup({ title, children }: { title: string; children: Re
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex flex-col">
-      <h3 id={id} className="border-b-2 border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-[0.04em]">{title}</h3>
+      <h3 id={id} className="border-b-2 border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-caps-tight">{title}</h3>
       {children}
     </section>
   );

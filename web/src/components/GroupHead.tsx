@@ -22,7 +22,7 @@ export function GroupHead({ label, meta, tone = 'muted', as: Tag = 'h2', id, sti
   return (
     <Tag
       id={id}
-      className={`${sticky ? 'sticky top-0 z-10' : ''} -mx-sheet flex items-baseline gap-2 border-b bg-paper px-sheet pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] ${
+      className={`${sticky ? 'sticky top-0 z-10' : ''} -mx-sheet flex items-baseline gap-2 border-b bg-paper px-sheet pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-caps ${
         tone === 'accent' ? 'border-rule-strong text-accent-ink' : 'border-rule text-ink-muted'
       }`}
     >

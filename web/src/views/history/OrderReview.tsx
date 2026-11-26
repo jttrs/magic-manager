@@ -3,7 +3,8 @@ import { useState, type ReactNode } from 'react';
 import { purchaseReviewQuery, purchaseStoresQuery, unwrap } from '../../app/queries';
 import { useFeature } from '../../app/features';
 import { Button } from '../../components/Button';
-import { Chevron } from '../../components/Chevron';
+import { Pressable } from '../../components/controls/Pressable';
+import { Chevron } from '../../components/icons/Chevron';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { FailureNote } from '../../components/companion/CompanionNotes';
 import { GridSkeleton, ErrorNote } from '../../components/States';
@@ -49,9 +50,9 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
     <section aria-labelledby="order-h" className="flex h-full min-h-0 flex-col">
       <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
-          <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
+          <Pressable onClick={onBack} className="inline-flex w-full items-center gap-0.5 text-sm voice-semi text-accent-ink">
             <Chevron dir="left" className="size-3.5" /> Purchase history
-          </button>
+          </Pressable>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
           <div className="min-w-0">
@@ -60,9 +61,9 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
               <span>{orderDate(p.ordered_at)} · {STATUS_LABEL[p.status]} · {fmtCount(p.copies, 'copy', 'copies')}</span>
               <VerificationMark store={store} />
               {onOpenEntry && p.ingest_id != null && (
-                <button type="button" onClick={() => onOpenEntry(p.ingest_id!)} className="-my-1 cursor-pointer py-1 voice-semi text-accent-ink underline underline-offset-2">
+                <Button tone="paper" emphasis="nav" onClick={() => onOpenEntry(p.ingest_id!)} className="-my-1 py-1">
                   See the cards it added
-                </button>
+                </Button>
               )}
             </p>
           </div>
@@ -79,7 +80,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
           <Fact label="Gain" value={<Valued p={p} field="gain" />} strong />
         </dl>
         {subtotalGap(p) != null && (
-          <p className="max-w-[70ch] text-sm leading-snug text-ink">
+          <p className="max-w-measure-wide text-sm leading-snug text-ink">
             The store’s item list adds up to {fmtUsd(p.paid_usd)}, but its subtotal is {fmtUsd(p.subtotal_usd)} — replacements or refunds aren’t priced exactly. Per-card prices are as the store lists them.
           </p>
         )}
@@ -87,7 +88,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
 
       <div className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
         <div role="table" aria-label={`Lines of ${p.store_name} order ${p.order_id}`} className="tabular text-sm">
-          <div role="row" aria-hidden="true" className={`${COLS} sticky top-0 z-10 hidden border-b border-rule-strong bg-paper py-1.5 text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted @[42rem]:grid`}>
+          <div role="row" aria-hidden="true" className={`${COLS} sticky top-0 z-10 hidden border-b border-rule-strong bg-paper py-1.5 text-xs voice-semi uppercase tracking-caps text-ink-muted @[42rem]:grid`}>
             <span>Card</span><span className="text-right">Qty</span><span className="text-right">Paid each</span><span className="text-right">Worth today</span>
           </div>
           {lines.map((l) => (
@@ -98,7 +99,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
 
       <footer className="mx-4 flex flex-col gap-2 border-t border-rule py-3">
         {alreadyOwned > 0 && addable > 0 && !saved && (
-          <p role="note" className="max-w-[70ch] text-sm text-ink">
+          <p role="note" className="max-w-measure-wide text-sm text-ink">
             You already own copies of {fmtInt(alreadyOwned)} of these cards. Adding counts them again — skip this if you entered them by hand.
           </p>
         )}
@@ -118,9 +119,9 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
                   : 'Recorded — sealed products aren’t added as cards.'}
           </p>
           {p.assigned === 0 && (
-            <button type="button" onClick={() => setConfirmForget(true)} className="ml-auto cursor-pointer text-sm text-ink-muted underline hover:text-ink">
+            <Button tone="paper" emphasis="link" onClick={() => setConfirmForget(true)} className="ml-auto text-sm">
               Forget this order
-            </button>
+            </Button>
           )}
         </div>
         {apply.isError && <FailureNote error={apply.error} />}
@@ -150,7 +151,7 @@ const KIND_NOTE = { single: null, sealed: 'Sealed product', other: 'Other item' 
 function Cell({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
   return (
     <span role="cell" className={`flex flex-col @[42rem]:block @[42rem]:text-right ${className}`}>
-      <span className="text-2xs voice-semi uppercase tracking-[0.06em] text-ink-muted @[42rem]:sr-only">{label}</span>
+      <span className="text-2xs voice-semi uppercase tracking-caps text-ink-muted @[42rem]:sr-only">{label}</span>
       {children}
     </span>
   );
@@ -178,7 +179,7 @@ function LineRow({ l }: { l: ReviewLineOut }) {
 function Fact({ label, value, strong = false }: { label: string; value: ReactNode; strong?: boolean }) {
   return (
     <div className="flex items-baseline gap-1.5">
-      <dt className="text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted">{label}</dt>
+      <dt className="text-xs voice-semi uppercase tracking-caps text-ink-muted">{label}</dt>
       <dd className={strong ? 'voice-semi font-medium text-ink' : 'text-ink'}>{value}</dd>
     </div>
   );

@@ -7,7 +7,7 @@ export function ProgressRule({ label, done, total, message, verb }: { label: str
         <span className="shrink-0 tabular">{total ? `${verb} ${fmt.format(Math.min(done + 1, total))} of ${fmt.format(total)}` : `${verb}…`}</span>
         {message && <span className="min-w-0 truncate">· {message}</span>}
       </div>
-      <div className="h-[3px] overflow-hidden rounded-pill bg-paper-sunk" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total ?? 0} aria-valuenow={done}>
+      <div className="h-bar overflow-hidden rounded-pill bg-paper-sunk" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total ?? 0} aria-valuenow={done}>
         <div className="h-full rounded-pill bg-accent transition-[width] duration-300 ease-guide" style={{ width: total ? `${(done / total) * 100}%` : '4%' }} />
       </div>
     </div>

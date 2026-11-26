@@ -3,6 +3,8 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery } from '../app/queries';
 import { ViewLayout } from '../components/AppShell';
+import { Button } from '../components/Button';
+import { Pressable } from '../components/controls/Pressable';
 import { SortMenu } from '../components/ArrangeControls';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
@@ -14,7 +16,7 @@ import { ProductContents } from './market/ProductContents';
 import { FoilGapCell, FoilPremiumFilter } from './market/FoilGap';
 import { FloorBasis } from './market/FloorBasis';
 import { useFamilyValues } from './market/useFamilyValues';
-import { Chevron } from '../components/Chevron';
+import { Chevron } from '../components/icons/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
 import { ProgressRule } from '../components/ProgressRule';
@@ -23,7 +25,7 @@ import { Segmented, SideSection, TextField } from '../components/Sidebar';
 import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
-import { ReadTabsMark, RefreshMark, TcgplayerMark } from '../components/StoreMarks';
+import { ReadTabsMark, RefreshMark, TcgplayerMark } from '../components/icons/marks';
 import { IconAction } from '../components/IconAction';
 import { MarketTabs } from './market/MarketTabs';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut } from '../core/api';
@@ -302,13 +304,13 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
       {failure && (
         <p role="alert" className="mx-sheet text-sm text-danger">
           Couldn’t value these products: {failure}.{' '}
-          <button type="button" className="cursor-pointer underline" onClick={reprice}>Try again</button>
+          <Button tone="paper" emphasis="link" onClick={reprice}>Try again</Button>
         </p>
       )}
       {unpriced > 0 && (
         <p className="mx-sheet text-sm text-ink-muted">
           {fmtCount(unpriced, 'product')} couldn’t be valued.{' '}
-          <button type="button" className="cursor-pointer text-ink underline" onClick={reprice}>Value again</button>
+          <Button tone="paper" emphasis="link" onClick={reprice}>Value again</Button>
         </p>
       )}
       {groups.length === 0 ? (
@@ -329,7 +331,7 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
           {groups.map((g) => (
             <tbody key={g.key}>
               <tr>
-                <th scope="colgroup" colSpan={4} className="border-b border-rule pb-1 pt-4 text-left text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
+                <th scope="colgroup" colSpan={4} className="border-b border-rule pb-1 pt-4 text-left text-sm voice-condensed font-medium uppercase tracking-caps text-ink-muted">
                   {g.label} <span className="tabular">· {g.rows.length}</span>
                 </th>
               </tr>
@@ -352,10 +354,10 @@ function ProductLine({ p, open, onToggle, pricing }: { p: ProductRow; open: bool
     <>
       <tr className="border-b border-rule/60">
         <th scope="row" className="py-1.5 pr-3 text-left font-normal">
-          <button type="button" aria-expanded={open} onClick={onToggle} className="group flex cursor-pointer items-baseline gap-1.5 text-left text-ink">
+          <Pressable aria-expanded={open} onClick={onToggle} className="group flex items-baseline gap-1.5 text-left text-ink">
             <Chevron dir={open ? 'down' : 'right'} className="size-3 shrink-0 self-center text-ink-muted transition-transform group-hover:text-ink" />
             <span>{p.name}</span>
-          </button>
+          </Pressable>
           {v?.error && <span className="ml-4.5 block text-xs text-danger">Couldn’t value: {v.error}</span>}
         </th>
         <Money v={v?.sealed_market} pending={pending} />
@@ -463,9 +465,9 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
         </tbody>
       </table>
       {shown.length > limit && (
-        <button type="button" onClick={() => setPage({ key: filterKey, n: limit + CARD_PAGE * 2 })} className="mx-sheet mt-3 cursor-pointer self-start rounded-sm border border-rule px-3 py-1.5 text-sm voice-semi text-ink hover:border-rule-strong">
+        <Button tone="paper" onClick={() => setPage({ key: filterKey, n: limit + CARD_PAGE * 2 })} className="mx-sheet mt-3 self-start">
           Show more · {fmtInt(shown.length - limit)} left
-        </button>
+        </Button>
       )}
     </div>
   );

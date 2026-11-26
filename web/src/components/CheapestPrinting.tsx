@@ -4,7 +4,7 @@ import { cardFloorsQuery } from '../app/queries';
 import type { FloorOut } from '../core/api';
 import { fmtUsd } from '../core/format';
 import { IconAction } from './IconAction';
-import { RefreshMark } from './StoreMarks';
+import { RefreshMark } from './icons/marks';
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 

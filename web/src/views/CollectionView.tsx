@@ -7,7 +7,7 @@ import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
 import { buyListTargets } from '../components/buyTargets';
-import { AddCardMark, CountCardsMark } from '../components/StoreMarks';
+import { AddCardMark, CountCardsMark } from '../components/icons/marks';
 import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
@@ -222,7 +222,7 @@ export function CollectionView() {
           options={[{ value: 'all', label: 'All cards' }, { value: 'only', label: 'Only earmarked' }]}
         />
         {filtered && (
-          <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
+          <Button emphasis="link" onClick={() => set(RESET)} className="self-start text-sm">Reset filters</Button>
         )}
       </SideSection>
       <SideSection title="Buy">
@@ -413,7 +413,7 @@ function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boole
 function FamilyCodes({ codes }: { codes: string[] }) {
   const head = codes.slice(0, 8).map((c) => c.toUpperCase());
   return (
-    <span className="pb-0.5 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted">
+    <span className="pb-0.5 text-xs voice-semi font-medium uppercase tracking-caps-wide text-ink-muted">
       Set family
       {head.length > 0 && (
         <span className="ml-1.5 font-regular tracking-normal tabular">

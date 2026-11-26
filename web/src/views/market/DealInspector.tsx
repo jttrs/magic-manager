@@ -4,6 +4,7 @@ import { ScraperDownMark } from '../../components/ScraperNotice';
 import { useState, type ReactNode } from 'react';
 import { dealsTabsQuery, unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
+import { SelectInput } from '../../components/controls/Select';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { dealsMatch, dealsUnwatch, type MatchOut, type ProductCostOut } from '../../core/api';
 import { effectiveType, PRODUCT_TYPE_LABEL, stockLabel, tabProductKey, type DealProduct, type Offer, type PriceRow, type TabListing } from '../../core/deals';
@@ -130,9 +131,9 @@ function MatchControl({ p, onPick }: { p: PriceRow; onPick: (key: string) => voi
       <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
         <span>Matched to <span className="text-ink">{p.match.name}</span>{p.kind === 'single' && p.match.finish === 'foil' ? ' · foil' : ''}</span>
         {p.status === 'confirmed' ? (
-          <button type="button" onClick={() => save.mutate(null)} className="touch-hit cursor-pointer underline hover:text-ink">you confirmed this · change</button>
+          <Button tone="paper" emphasis="link" onClick={() => save.mutate(null)} className="touch-hit">you confirmed this · change</Button>
         ) : p.status === 'matched' && candidates.some((c) => !sameChoice(c, p.match)) ? (
-          <button type="button" onClick={() => setChanging(true)} className="touch-hit cursor-pointer underline hover:text-ink">not this?</button>
+          <Button tone="paper" emphasis="link" onClick={() => setChanging(true)} className="touch-hit">not this?</Button>
         ) : null}
         {error}
       </p>
@@ -143,16 +144,15 @@ function MatchControl({ p, onPick }: { p: PriceRow; onPick: (key: string) => voi
       <div className="flex flex-col gap-1 text-xs">
         <span className="text-ink-muted">{changing ? 'Which product is this?' : p.note || 'Which product is this?'}</span>
         <span className="flex flex-wrap items-center gap-2">
-          <select
+          <SelectInput
             aria-label={`Which product is ${p.title ?? 'this'}?`}
             value={pick}
             onChange={(e) => setPick(Number(e.target.value))}
-            className="max-w-full rounded-sm border border-rule-strong bg-paper-raised px-2 py-1 text-sm text-ink"
           >
             {candidates.map((c, i) => <option key={`${c.set_code}|${c.name}|${c.scryfall_id}|${c.finish}`} value={i}>{c.name}{p.kind === 'sld' && c.finish ? ` · ${c.finish}` : ''}{c.price != null ? ` — ${fmtUsd(c.price)}` : ''}</option>)}
-          </select>
+          </SelectInput>
           <Button tone="paper" onClick={() => save.mutate(candidates[pick])} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'This one'}</Button>
-          {changing && <button type="button" onClick={() => setChanging(false)} className="touch-hit cursor-pointer text-ink-muted underline hover:text-ink">cancel</button>}
+          {changing && <Button tone="paper" emphasis="link" onClick={() => setChanging(false)} className="touch-hit">cancel</Button>}
         </span>
         {error}
       </div>

@@ -1,6 +1,9 @@
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { useState, type ReactNode } from 'react';
 import { useMediaQuery } from '../app/useMediaQuery';
+import { Pressable } from './controls/Pressable';
+import { IconAction } from './IconAction';
+import { CloseMark } from './icons/marks';
 
 export type Column = { id: string; title: string; count: number; body: ReactNode; legend?: ReactNode };
 
@@ -24,17 +27,16 @@ export function GuideColumns({ columns, visible, onHide, storageKey }: { columns
       <div className="flex h-[calc(100dvh-10rem)] min-h-0 flex-col">
         <div role="tablist" aria-label="Columns" className="mx-sheet flex gap-1 border-b-2 border-rule-strong">
           {shown.map((c) => (
-            <button
+            <Pressable
               key={c.id}
               role="tab"
-              type="button"
               aria-selected={c.id === active.id}
               aria-controls={`tabpanel-${c.id}`}
               onClick={() => setTab(c.id)}
-              className="min-w-0 flex-1 cursor-pointer truncate rounded-t-sm px-2 pb-1 pt-1.5 text-md voice-condensed font-bold uppercase text-ink-muted aria-selected:bg-paper-sunk aria-selected:text-ink"
+              className="min-w-0 flex-1 rounded-t-sm px-2 pb-1 pt-1.5 text-md voice-condensed font-bold uppercase text-ink-muted aria-selected:bg-paper-sunk aria-selected:text-ink"
             >
-              {c.title} <span className="font-regular tabular">{c.count}</span>
-            </button>
+              <span className="block truncate text-center">{c.title} <span className="font-regular tabular">{c.count}</span></span>
+            </Pressable>
           ))}
         </div>
         <div role="tabpanel" id={`tabpanel-${active.id}`} aria-label={active.title} className="flex min-h-0 flex-1 flex-col">
@@ -79,14 +81,9 @@ function PanelFrag({ col, first, onHide, canHide }: { col: Column; first: boolea
               <span className="font-regular text-ink-muted"> · <span className="tabular">{col.count}</span></span>
             </h2>
             {canHide && (
-              <button
-                type="button"
-                onClick={() => onHide(col.id)}
-                aria-label={`Hide ${col.title} column`}
-                className="ml-auto grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-sm text-lg leading-none text-ink-muted transition-colors ease-guide hover:bg-paper-sunk hover:text-ink"
-              >
-                ×
-              </button>
+              <span className="ml-auto shrink-0">
+                <IconAction label={`Hide ${col.title} column`} Icon={CloseMark} onClick={() => onHide(col.id)} />
+              </span>
             )}
           </header>
           {col.legend && <div className="mx-sheet pt-1.5">{col.legend}</div>}

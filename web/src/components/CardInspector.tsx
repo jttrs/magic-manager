@@ -10,7 +10,8 @@ import { useId, type ComponentType, type SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
 import { CheapestPrinting } from './CheapestPrinting';
 import { EarmarkSection } from './EarmarkSection';
-import { ExploreMark, ScryfallMark, TcgplayerMark } from './StoreMarks';
+import { dialogContentClass, dialogOverlayClass } from './controls/surfaces';
+import { ExploreMark, ScryfallMark, TcgplayerMark } from './icons/marks';
 
 const RARITY_NAME: Record<string, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', mythic: 'Mythic', special: 'Special', bonus: 'Bonus' };
 
@@ -21,9 +22,9 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
   return (
     <Dialog.Root open={card != null} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay className={dialogOverlayClass} />
         {card && (
-          <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[94dvh] w-[min(52rem,calc(100vw-1rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none sm:flex-row">
+          <Dialog.Content className={`${dialogContentClass('lg')} sm:flex-row`}>
             <div className="mx-auto w-full max-w-[22rem] shrink-0 sm:mx-0 sm:w-[min(22rem,45%)]">
               {parts ? (
                 <div className="grid grid-cols-2 gap-2">
@@ -32,7 +33,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
               ) : card.image ? (
                 <BigArt image={card.image} name={card.name} />
               ) : (
-                <div className="grid aspect-[488/680] w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{card.name}</div>
+                <div className="grid aspect-card w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{card.name}</div>
               )}
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -116,7 +117,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                     title="Open in Explorer"
                     className={`${VIEW_ON} ml-auto -mr-2`}
                   >
-                    <ExploreMark className="size-[1.15rem]" />
+                    <ExploreMark className="size-icon-md" />
                     Explorer
                   </Link>
                 </div>
@@ -140,8 +141,8 @@ function pairParts(card: GuideCard): Part[] | null {
 }
 
 function BigArt({ image, name }: { image: string | null; name: string }) {
-  if (!image) return <div className="grid aspect-[488/680] w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{name}</div>;
-  return <img src={large(image)} alt={name} width={672} height={936} className="aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_10px_28px_-14px_var(--theme-scrim)]" />;
+  if (!image) return <div className="grid aspect-card w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{name}</div>;
+  return <img src={large(image)} alt={name} width={672} height={936} className="aspect-card h-auto w-full rounded-card bg-paper-sunk shadow-[0_10px_28px_-14px_var(--theme-scrim)]" />;
 }
 
 /** One card of a partner pairing: its printing, cheapest printing and your copies. */
@@ -165,7 +166,7 @@ function PairPart({ part, onLeave }: { part: Part; onLeave: () => void }) {
 
 /** One "View on" link: amber ink, no fill until hover/focus — the same for the
  *  other sites and for this app's Explorer. */
-const VIEW_ON = 'inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk';
+const VIEW_ON = 'inline-flex min-h-control cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk';
 
 /** A link to another site: that site's monochrome mark + its name (the mark replaces a generic ↗). */
 export function OutLink({ href, label, Mark }: { href: string; label: string; Mark: ComponentType<SVGProps<SVGSVGElement>> }) {
@@ -177,7 +178,7 @@ export function OutLink({ href, label, Mark }: { href: string; label: string; Ma
       title={`Open on ${label}`}
       className={`${VIEW_ON} -ml-2`}
     >
-      <Mark className="size-[1.15rem]" />
+      <Mark className="size-icon-md" />
       {label}
       <span className="sr-only">(opens in a new tab)</span>
     </a>

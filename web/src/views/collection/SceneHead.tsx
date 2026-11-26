@@ -1,7 +1,7 @@
 import { Popover, Tooltip } from 'radix-ui';
 import { CopyTargets } from '../../components/CopyButton';
 import { buyListTargets, type BuyStore } from '../../components/buyTargets';
-import { BuyListMark } from '../../components/StoreMarks';
+import { BuyListMark } from '../../components/icons/marks';
 import { collectionBuyList, type SceneFinishOut, type SceneOut } from '../../core/api';
 import { FINISH_LABEL, finishTally, isComplete, missingLine, sceneBuyItems, sceneByline, scenePct } from '../../core/scenes';
 
@@ -27,7 +27,7 @@ export function SceneMeta({ scene }: { scene: SceneOut }) {
     <span className="flex items-center gap-4">
       {scene.finishes.map((f) => (
         <span key={f.finish} className={`hidden whitespace-nowrap text-sm tabular @[52rem]:inline ${isComplete(f) ? 'text-ink-muted' : 'text-ink'}`}>
-          <span className="mr-1.5 text-xs voice-semi font-medium uppercase tracking-[0.06em] text-ink-muted">{FINISH_LABEL[f.finish]}</span>
+          <span className="mr-1.5 text-xs voice-semi font-medium uppercase tracking-caps text-ink-muted">{FINISH_LABEL[f.finish]}</span>
           {finishTally(f)}
         </span>
       ))}
@@ -56,11 +56,11 @@ function SceneBuy({ scene }: { scene: SceneOut }) {
               aria-label={label}
               className="touch-hit grid size-7 cursor-pointer place-items-center rounded-sm text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk"
             >
-              <BuyListMark className="size-[1.15rem]" />
+              <BuyListMark className="size-icon-md" />
             </Popover.Trigger>
           </Tooltip.Trigger>
           <Tooltip.Portal>
-            <Tooltip.Content side="bottom" sideOffset={6} collisionPadding={12} className="z-50 max-w-[16rem] rounded-sm border border-chrome-line bg-chrome-raised px-2.5 py-1.5 text-sm leading-snug text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
+            <Tooltip.Content side="bottom" sideOffset={6} collisionPadding={12} className="z-50 max-w-[16rem] rounded-sm border border-chrome-line bg-chrome-raised px-2.5 py-1.5 text-sm leading-snug text-on-chrome shadow-popover">
               {label}
             </Tooltip.Content>
           </Tooltip.Portal>
@@ -72,7 +72,7 @@ function SceneBuy({ scene }: { scene: SceneOut }) {
           sideOffset={6}
           collisionPadding={12}
           aria-label={label}
-          className="z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+          className="z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-popover"
         >
           <p className="m-0 text-on-chrome">
             <span className="voice-semi font-medium">{scene.name}</span>
@@ -80,7 +80,7 @@ function SceneBuy({ scene }: { scene: SceneOut }) {
           </p>
           {scene.finishes.map((f) => (
             <section key={f.finish} aria-label={FINISH_LABEL[f.finish]} className="flex flex-col gap-1.5">
-              <h4 className="m-0 flex items-baseline justify-between gap-2 text-xs voice-semi font-medium uppercase tracking-[0.06em] text-on-chrome-muted">
+              <h4 className="m-0 flex items-baseline justify-between gap-2 text-xs voice-semi font-medium uppercase tracking-caps text-on-chrome-muted">
                 {FINISH_LABEL[f.finish]}
                 <span className="text-sm normal-case tracking-normal tabular text-on-chrome">{missingLine(f)}</span>
               </h4>

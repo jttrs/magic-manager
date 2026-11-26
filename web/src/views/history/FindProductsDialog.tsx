@@ -3,6 +3,8 @@ import { Dialog } from 'radix-ui';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useJob, type JobLive } from '../../app/useJob';
 import { Button } from '../../components/Button';
+import { Check } from '../../components/controls/Check';
+import { dialogContentClass, dialogOverlayClass } from '../../components/controls/surfaces';
 import { ProgressRule } from '../../components/ProgressRule';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { confirmed, coveragePhase, productMeta, readNotMine, rememberNotMine, scanFrom, withPick, type CoverageScan } from '../../core/trueup';
@@ -19,11 +21,11 @@ export function FindProductsDialog({ trigger }: { trigger: ReactNode }) {
     <Dialog.Root open={open} onOpenChange={(o) => { if (o || !busy) setOpen(o); }}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay className={dialogOverlayClass} />
         <Dialog.Content
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
-          className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(44rem,calc(100dvh-1.5rem))] w-[min(40rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none"
+          className={dialogContentClass('md', 'frame')}
         >
           {open && <Review onClose={() => { setBusy(false); setOpen(false); }} onBusy={setBusy} />}
         </Dialog.Content>
@@ -105,13 +107,13 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
         {failure && (
           <p role="alert" className="text-md text-danger">
             {failure}{' '}
-            <button type="button" className="cursor-pointer underline" onClick={() => { recordJob.reset(); scan(picks); }}>Scan again</button>
+            <Button tone="paper" emphasis="link" onClick={() => { recordJob.reset(); scan(picks); }}>Scan again</Button>
           </p>
         )}
         {phase === 'review' && result && unread.length > 0 && (
           <p role="alert" className="mb-4 text-md leading-relaxed text-danger">
             {fmtCount(unread.length, 'product list')} couldn’t be read, so {unread.length === 1 ? 'its products weren’t' : 'their products weren’t'} checked: {unread.slice(0, 3).map((u) => u.name).join(', ')}{unread.length > 3 ? '…' : ''}.{' '}
-            <button type="button" className="cursor-pointer underline" onClick={() => scan(picks)}>Scan again</button>
+            <Button tone="paper" emphasis="link" onClick={() => scan(picks)}>Scan again</Button>
           </p>
         )}
         {phase === 'review' && result && (
@@ -121,24 +123,21 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
             <div className="flex flex-col gap-5">
               {result.ready.length > 0 && (
                 <section aria-labelledby="fp-ready" className="flex flex-col gap-1">
-                  <h3 id="fp-ready" className="text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">Your cards complete · {fmtInt(result.ready.length)}</h3>
+                  <h3 id="fp-ready" className="text-sm voice-condensed font-medium uppercase tracking-caps text-ink-muted">Your cards complete · {fmtInt(result.ready.length)}</h3>
                   <ul className="flex flex-col">
                     {result.ready.map((p) => {
                       const mine = !notMine.has(p.fileName);
                       return (
                         <li key={p.fileName} className="flex items-center gap-3 border-b border-rule py-2">
-                          <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
-                            <input
-                              type="checkbox"
+                          <div className="min-w-0 flex-1">
+                            <Check
                               checked={mine}
                               onChange={() => setNotMine((s) => { const n = new Set(s); if (mine) n.add(p.fileName); else n.delete(p.fileName); return n; })}
-                              className="mt-1 accent-[var(--theme-accent)]"
-                            />
-                            <span className="min-w-0">
+                              hint={productMeta(p)}
+                            >
                               <span className={`block ${mine ? 'text-ink' : 'text-ink-muted line-through'}`}>{p.name}</span>
-                              <span className="block text-xs text-ink-muted">{productMeta(p)}</span>
-                            </span>
-                          </label>
+                            </Check>
+                          </div>
                           <span className="shrink-0 text-right text-sm tabular text-ink-muted">{fmtCount(p.recipe_qty, 'card')} · <span className="text-ink">{fmtUsd(p.usd)}</span></span>
                         </li>
                       );
@@ -149,7 +148,7 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
               )}
               {result.conflicts.length > 0 && (
                 <section aria-labelledby="fp-lost" className="flex flex-col gap-1">
-                  <h3 id="fp-lost" className="text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">Shared a card with another product · {fmtInt(result.conflicts.length)}</h3>
+                  <h3 id="fp-lost" className="text-sm voice-condensed font-medium uppercase tracking-caps text-ink-muted">Shared a card with another product · {fmtInt(result.conflicts.length)}</h3>
                   <ul className="flex flex-col">
                     {result.conflicts.map((p) => (
                       <li key={p.fileName} className="flex items-center gap-3 border-b border-rule py-2">
@@ -157,13 +156,9 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
                           <span className="block text-ink">{p.name}</span>
                           <span className="block text-xs text-ink-muted">{productMeta(p)}{p.lost_to.length ? ` · its shared cards went to ${p.lost_to.slice(0, 2).join(', ')}` : ''}</span>
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => { const next = withPick(picks, p.fileName); setPicks(next); scan(next); }}
-                          className="shrink-0 cursor-pointer rounded-sm border border-rule px-2.5 py-1 text-sm voice-semi text-ink hover:border-rule-strong"
-                        >
+                        <Button tone="paper" onClick={() => { const next = withPick(picks, p.fileName); setPicks(next); scan(next); }} className="shrink-0">
                           I opened this one
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>

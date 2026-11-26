@@ -1,7 +1,8 @@
-// Monochrome marks drawn for this guide (currentColor, 24px stroke grid): the
-// stores after their own logos — ManaPool's lettered cube, TCGplayer's fanned
-// cards with a bolt, Card Kingdom's castle in a roundel, Scryfall's scrying orb —
-// plus the add-card and magnifier marks. External links carry their site's mark.
+// THE icon set: every mark the app draws, monochrome (currentColor, stroke, mostly a
+// 24px grid). Store and site marks after their own logos — ManaPool's lettered cube,
+// TCGplayer's fanned cards with a bolt, Card Kingdom's castle in a roundel, Scryfall's
+// scrying orb — then the app's own actions and UI glyphs. Size a mark with the
+// `size-icon-*` tokens; never draw an <svg> icon anywhere else (a test enforces it).
 import { useId, type SVGProps } from 'react';
 
 type MarkProps = SVGProps<SVGSVGElement>;
@@ -305,6 +306,192 @@ export function CopyListMark(p: MarkProps) {
       <rect x="4" y="6.5" width="12.5" height="14.5" rx="1.4" />
       <path d="M7.2 10.8h0M7.2 13.8h0M7.2 16.8h0" strokeWidth={2} />
       <path d="M9.8 10.8h3.8M9.8 13.8h3.8M9.8 16.8h2.6" />
+    </svg>
+  );
+}
+
+// ── UI glyphs and app actions (moved here from the components that drew them) ──
+
+const small = { viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
+
+/** Bars shortening downward with a down-arrow beside them (sort). */
+export function SortMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 6h10M4 11h7M4 16h4" />
+      <path d="M18 5v13M15 15l3 3 3-3" />
+    </svg>
+  );
+}
+
+/** Two ruled heads, each over its rows (group by). */
+export function GroupMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3.5 4.5h17M6.5 8h11M6.5 11h11" />
+      <path d="M3.5 14.5h17M6.5 18h11" />
+    </svg>
+  );
+}
+
+export function GridMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" />
+    </svg>
+  );
+}
+
+export function ListMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M8.5 6h11.5M8.5 12h11.5M8.5 18h11.5" />
+      <path d="M4 6h.5M4 12h.5M4 18h.5" strokeWidth={2.4} />
+    </svg>
+  );
+}
+
+/** A card added to the marked list (list + check) or not yet (list + plus). */
+export function MarkListMark({ on, ...p }: MarkProps & { on: boolean }) {
+  return (
+    <svg {...base} strokeWidth={1.8} {...p}>
+      <path d="M4 6h11M4 11h11M4 16h6" />
+      {on ? <path d="M13.5 17l2.5 2.5 5-5.5" /> : <path d="M17 13.5v7M13.5 17h7" />}
+    </svg>
+  );
+}
+
+export function UndoMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.6} {...p}>
+      <path d="M3.5 6.5h6a3.5 3.5 0 0 1 0 7H6" />
+      <path d="M6 3.5 3 6.5l3 3" />
+    </svg>
+  );
+}
+
+export function GearMark(p: MarkProps) {
+  return (
+    <svg {...small} {...p}>
+      <path d="M8 1.6v1.9M8 12.5v1.9M14.4 8h-1.9M3.5 8H1.6M12.5 3.5l-1.35 1.35M4.85 11.15 3.5 12.5M12.5 12.5l-1.35-1.35M4.85 4.85 3.5 3.5" strokeWidth={2} />
+      <circle cx="8" cy="8" r="4.1" strokeWidth={1.5} />
+      <circle cx="8" cy="8" r="1.6" strokeWidth={1.4} />
+    </svg>
+  );
+}
+
+export function FlagMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.5} {...p}>
+      <path d="M3.5 14.5V2" />
+      <path d="M3.5 2.8h8.2l-1.9 2.9 1.9 2.9H3.5" />
+    </svg>
+  );
+}
+
+export function PersonMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.5} {...p}>
+      <circle cx="8" cy="5.4" r="2.9" />
+      <path d="M2.6 14.2c.6-2.9 2.8-4.5 5.4-4.5s4.8 1.6 5.4 4.5" />
+    </svg>
+  );
+}
+
+/** A person with a plus (invite someone). */
+export function InviteMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="9.5" cy="8" r="3.6" />
+      <path d="M2.8 20.2c.8-3.8 3.6-6 6.7-6s5.9 2.2 6.7 6" />
+      <path d="M18.6 6.6v6M15.6 9.6h6" />
+    </svg>
+  );
+}
+
+/** Three short rules (background jobs). */
+export function JobsMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.6} {...p}>
+      <path d="M3 4.5h10M3 8h10M3 11.5h6" />
+    </svg>
+  );
+}
+
+/** A plug (the browser companion). */
+export function PlugMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.5} {...p}>
+      <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0z" />
+      <path d="M8 11.5v2" />
+    </svg>
+  );
+}
+
+/** Two chain links (a deck link / URL). */
+export function LinkMark(p: MarkProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden="true" {...p}>
+      <path d="M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2L10 5.8" />
+      <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l1.1-1.1" />
+    </svg>
+  );
+}
+
+/** A broken link (a scraper that's down). */
+export function BrokenLinkMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.5} {...p}>
+      <path d="M6.6 9.4 5 11a2 2 0 0 1-2.9-2.9l1.6-1.6M9.4 6.6 11 5a2 2 0 0 1 2.9 2.9l-1.6 1.6M5.2 2.4l.5 1.7M2.4 5.2l1.7.5M10.8 13.6l-.5-1.7M13.6 10.8l-1.7-.5" />
+    </svg>
+  );
+}
+
+/** Done / copied / chosen. */
+export function CheckMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.9} {...p}>
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  );
+}
+
+/** Close / clear / remove. */
+export function CloseMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.6} {...p}>
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </svg>
+  );
+}
+
+/** The small filled caret on a select or menu trigger. */
+export function CaretMark(p: MarkProps) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" {...p}>
+      <path d="M4.5 6.5h7L8 10.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** The ⓘ of an explanation. */
+export function InfoMark(p: MarkProps) {
+  return (
+    <svg {...small} {...p}>
+      <circle cx="8" cy="8" r="6.4" strokeWidth={1.4} />
+      <path d="M8 7.2v4M8 4.9v.1" strokeWidth={1.6} />
+    </svg>
+  );
+}
+
+/** ‹ › — a draggable split handle. */
+export function ResizeMark(p: MarkProps) {
+  return (
+    <svg viewBox="0 0 16 8" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
+      <path d="M5 1 2 4l3 3M11 1l3 3-3 3" />
     </svg>
   );
 }

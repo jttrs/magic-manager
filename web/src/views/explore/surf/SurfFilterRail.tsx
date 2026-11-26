@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { ToggleGroup } from 'radix-ui';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { surfOptionsQuery } from '../../../app/queries';
+import { Button } from '../../../components/Button';
+import { RailField } from '../../../components/controls/RailField';
+import { TextInput } from '../../../components/controls/TextField';
 import { MultiSelect } from '../../../components/MultiSelect';
 import { Segmented, SideSection } from '../../../components/Sidebar';
 import { activeFilters, COLOR_NAME, COLORS, EMPTY_FILTERS, toggleColor, type SurfFilters, type SurfSource, type SurfState } from '../../../core/surf';
@@ -91,9 +94,9 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
       </SideSection>
 
       {active > 0 && (
-        <button type="button" onClick={() => setF(EMPTY_FILTERS)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
+        <Button emphasis="link" onClick={() => setF(EMPTY_FILTERS)} className="self-start text-sm">
           Reset filters · {active}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -134,12 +137,13 @@ function ColorPips({ value, onChange }: { value: string; onChange: (v: string) =
 /** Artist name, applied on Enter or when the field loses focus (keyed by the
  *  applied value, so a reset clears the text). */
 function ArtistField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const id = useId();
   const [text, setText] = useState(value);
   const commit = () => text.trim() !== value && onChange(text.trim());
   return (
-    <label className="flex flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
-      Artist
-      <input
+    <RailField label="Artist" htmlFor={id}>
+      <TextInput
+        id={id}
         name="surf-artist"
         type="search"
         autoComplete="off"
@@ -149,8 +153,7 @@ function ArtistField({ value, onChange }: { value: string; onChange: (v: string)
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && commit()}
         onBlur={commit}
-        className="min-h-9 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
       />
-    </label>
+    </RailField>
   );
 }

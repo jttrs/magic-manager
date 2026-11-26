@@ -2,6 +2,8 @@ import { Dialog } from 'radix-ui';
 import { useState } from 'react';
 import { useCompanion, type CompanionState } from '../../app/useCompanion';
 import { Button } from '../Button';
+import { PlugMark } from '../icons/marks';
+import { dialogContentClass, dialogOverlayClass } from '../controls/surfaces';
 import { iconActionClass } from '../iconActionClass';
 import { IconTooltip } from '../IconTooltip';
 import { CopyButton } from '../CopyButton';
@@ -19,10 +21,7 @@ export function CompanionButton() {
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <IconTooltip label={label}>
         <Dialog.Trigger aria-label={label} className={iconActionClass('chrome')}>
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[1.125rem]">
-            <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M8 11.5v2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          <PlugMark className="size-icon-md" />
           {c.status === 'ready' && (
             <span aria-hidden="true" className={`absolute right-1.5 top-1.5 size-2 rounded-pill ${c.outdated ? 'bg-danger' : 'bg-accent'}`} />
           )}
@@ -40,11 +39,11 @@ export function CompanionButton() {
 function SetupPortal({ c }: { c: CompanionState }) {
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-      <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(52rem,calc(100dvh-1.5rem))] w-[min(44rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+      <Dialog.Overlay className={dialogOverlayClass} />
+      <Dialog.Content className={dialogContentClass('md', 'frame')}>
         <div className="flex flex-col gap-2 border-b-2 border-rule-strong px-5 pb-3 pt-5">
           <Dialog.Title className="text-2xl voice-condensed font-bold leading-none">Browser companion</Dialog.Title>
-          <Dialog.Description className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+          <Dialog.Description className="max-w-measure-body text-md leading-relaxed text-ink-muted">
             A Chrome extension that reads your carts, your open store tabs, Moxfield and Archidekt decks and your Moxfield collection in your own browser. Each time, it shows you exactly what it would send and waits for you to approve.
           </Dialog.Description>
         </div>
@@ -71,7 +70,7 @@ export function SetUpCompanionButton({ label = 'Set up the browser companion' }:
   );
 }
 
-const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-[0.04em] text-ink';
+const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-caps-tight text-ink';
 
 function Setup({ c }: { c: CompanionState }) {
   const origin = window.location.origin;
@@ -91,7 +90,7 @@ function Setup({ c }: { c: CompanionState }) {
             <p className="text-sm text-ink-muted">{storeNote(c)}</p>
           </div>
         ) : (
-          <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">The companion isn’t on the Chrome Web Store yet — install it with the developer install below.</p>
+          <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">The companion isn’t on the Chrome Web Store yet — install it with the developer install below.</p>
         )}
         <details open={!anyStore} className="border-y border-rule py-2 text-md">
           <summary className="cursor-pointer voice-semi font-medium text-ink">Developer install</summary>

@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { fmtInt } from '../../core/format';
 import type { ReviewStats } from '../../core/ingest';
-import { Chevron } from '../Chevron';
+import { Button } from '../Button';
+import { Chevron } from '../icons/Chevron';
 
 /** A read list under review: title, a way back, the reader's warnings, then the checklist. */
 export function Review({ title, warnings, back, children }: { title: string; warnings: string[]; back: { label: string; onClick: () => void }; children: ReactNode }) {
@@ -9,14 +10,10 @@ export function Review({ title, warnings, back, children }: { title: string; war
     <section aria-label={title} className="flex min-h-0 flex-1 flex-col @container">
       <div className="flex items-baseline gap-4 border-b-2 border-rule-strong pb-1">
         <h3 className="text-lg voice-condensed font-bold uppercase">{title}</h3>
-        <button
-          type="button"
-          onClick={back.onClick}
-          className="inline-flex cursor-pointer items-center gap-0.5 self-center rounded-sm px-1 text-sm voice-semi font-medium text-accent-ink underline decoration-1 underline-offset-2 hover:decoration-2"
-        >
-          <Chevron dir="left" className="size-3.5" />
+        <Button tone="paper" emphasis="link" onClick={back.onClick} className="self-center text-sm">
+          <Chevron dir="left" className="mr-0.5 inline size-icon-xs align-text-bottom" />
           {back.label}
-        </button>
+        </Button>
       </div>
       {warnings.length > 0 && (
         <details className="border-b border-rule py-1.5 text-sm text-ink-muted">

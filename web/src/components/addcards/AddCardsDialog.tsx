@@ -6,6 +6,8 @@ import { deckImport, ingestCommit, type DeckSourceOut, type PrintingOut, type Re
 import { fmtInt } from '../../core/format';
 import { commitItems, fromResolved, readTitle, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { Button } from '../Button';
+import { Check } from '../controls/Check';
+import { dialogOverlayClass } from '../controls/surfaces';
 import { useFeature } from '../../app/features';
 import { CollectionPane } from './CollectionPane';
 import { DeckPane } from './DeckPane';
@@ -97,9 +99,9 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
     <Dialog.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setDone(null); setError(''); } }}>
       {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay className={dialogOverlayClass} />
         <Dialog.Content
-          className="paper-grain fixed inset-x-2 top-[3dvh] bottom-[3dvh] z-50 mx-auto flex max-w-6xl flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none sm:inset-x-6 @container"
+          className="paper-grain fixed inset-x-2 top-[3dvh] bottom-[3dvh] z-50 mx-auto flex max-w-6xl flex-col rounded-sm bg-paper text-ink shadow-dialog focus:outline-none sm:inset-x-6 @container"
         >
           <Tabs.Root value={mode} onValueChange={(m) => { setMode(m as Mode); setDone(null); setError(''); }} className="flex min-h-0 flex-1 flex-col">
             <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b-2 border-rule-strong px-5 pt-4">
@@ -187,10 +189,9 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
                 <ReviewTally stats={stats} />
                 {error && <p role="alert" className="text-sm text-danger">{error}</p>}
                 {mode === 'deck' && deck?.source && (
-                  <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-sm text-ink">
-                    <input type="checkbox" checked={saveList} onChange={(e) => setSaveList(e.target.checked)} className="accent-[var(--theme-accent)]" />
-                    Also save the decklist to Decks
-                  </label>
+                  <span className="ml-auto text-sm text-ink">
+                    <Check checked={saveList} onChange={setSaveList}>Also save the decklist to Decks</Check>
+                  </span>
                 )}
                 <Button tone="paper" emphasis="primary" onClick={commit} disabled={busy || stats.copies === 0} className="ml-auto">
                   {busy ? 'Adding…' : `Add ${fmtInt(stats.copies)} ${stats.copies === 1 ? 'copy' : 'copies'}`}

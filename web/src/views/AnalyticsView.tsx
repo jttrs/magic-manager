@@ -268,7 +268,7 @@ function Jobs({ s }: { s: Summary }) {
       {s.jobs.length ? (
         <table className="mt-1 w-full text-left text-md">
           <thead>
-            <tr className="ruled text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted">
+            <tr className="ruled text-xs voice-semi uppercase tracking-caps text-ink-muted">
               <th className="py-1 font-normal">Job</th>
               <th className="py-1 text-right font-normal">Runs</th>
               <th className="py-1 text-right font-normal">Failed</th>
@@ -327,7 +327,7 @@ function Trace({ refId, onClose }: { refId: string; onClose: () => void }) {
     <section aria-labelledby="trace-h" className="mb-6 rounded-sm bg-paper-sunk px-4 py-3">
       <div className="flex items-baseline gap-3">
         <h2 id="trace-h" className="text-xl voice-condensed font-bold">Ref <span className="tabular">{refId}</span></h2>
-        <button type="button" onClick={onClose} className="ml-auto cursor-pointer text-sm voice-semi text-ink-muted hover:text-ink">Close trace</button>
+        <Button tone="paper" emphasis="link" onClick={onClose} className="ml-auto text-sm voice-semi">Close trace</Button>
       </div>
       {q.error ? (
         <p role="alert" className="mt-1 text-md text-danger">{(q.error as Error).message}</p>

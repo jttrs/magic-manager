@@ -4,6 +4,8 @@ import { Dialog, ToggleGroup } from 'radix-ui';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
+import { TextInput } from '../../components/controls/TextField';
+import { dialogContentClass, dialogOverlayClass, dialogTitleClass } from '../../components/controls/surfaces';
 import { deckCreate } from '../../core/api';
 
 const FORMATS = [
@@ -46,14 +48,15 @@ export function NewDeckDialog({ trigger }: { trigger: ReactNode }) {
     <Dialog.Root open={open} onOpenChange={(o) => !busy && setOpen(o)}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 w-[min(28rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('sm')}>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <Dialog.Title className="border-b-2 border-rule-strong pb-2 text-2xl voice-condensed font-bold leading-none">New deck</Dialog.Title>
+            <Dialog.Title className={dialogTitleClass}>New deck</Dialog.Title>
             <Dialog.Description className="sr-only">Name your deck and pick its format; you’ll add cards in the editor.</Dialog.Description>
             <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
               Deck name
-              <input
+              <TextInput
+                tone="paper"
                 autoFocus
                 required
                 maxLength={120}
@@ -61,7 +64,6 @@ export function NewDeckDialog({ trigger }: { trigger: ReactNode }) {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Tifa’s Monk Combo"
                 autoComplete="off"
-                className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
               />
             </label>
             <div className="flex flex-col gap-1.5">
@@ -77,7 +79,7 @@ export function NewDeckDialog({ trigger }: { trigger: ReactNode }) {
                   <ToggleGroup.Item
                     key={f.value}
                     value={f.value}
-                    className="min-h-9 flex-1 cursor-pointer bg-paper-raised px-2.5 text-sm voice-semi text-ink transition-colors ease-guide hover:bg-paper-sunk data-[state=on]:bg-accent data-[state=on]:text-on-accent"
+                    className="min-h-control flex-1 cursor-pointer bg-paper-raised px-2.5 text-sm voice-semi text-ink transition-colors ease-guide hover:bg-paper-sunk data-[state=on]:bg-accent data-[state=on]:text-on-accent"
                   >
                     {f.label}
                   </ToggleGroup.Item>

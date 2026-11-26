@@ -16,7 +16,10 @@ import { ALLOW_ACCESS_HINT, type MoxfieldBinder } from '../../core/companion';
 import { fmtInt } from '../../core/format';
 import { MOXFIELD_COLLECTION_KEY } from '../../core/scraperHealth';
 import { Button } from '../Button';
-import { Chevron } from '../Chevron';
+import { Check } from '../controls/Check';
+import { FileInput } from '../controls/Inputs';
+import { TextInput } from '../controls/TextField';
+import { Chevron } from '../icons/Chevron';
 import { AwaitingNote, FailureNote } from '../companion/CompanionNotes';
 import { ScraperNotice } from '../ScraperNotice';
 
@@ -74,7 +77,7 @@ export function CollectionPane({ companion }: { companion: boolean }) {
           <span className="text-sm text-ink-muted">One entry in Purchase history · {done.title}</span>
         </p>
       )}
-      <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+      <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">
         Bring in the cards you track in another app. You’ll see every card that would change before anything is saved.
       </p>
       <FileSource onRead={onRead} />
@@ -117,7 +120,7 @@ function FileSource({ onRead }: { onRead: (r: Read) => void }) {
         onDrop={onDrop}
         className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-sm border border-dashed px-4 py-4 transition-colors ease-guide ${drag ? 'border-accent bg-paper-sunk' : 'border-rule-strong'}`}
       >
-        <input ref={input} type="file" accept=".csv,.txt,text/csv,text/plain" className="sr-only" tabIndex={-1} aria-hidden
+        <FileInput ref={input} accept=".csv,.txt,text/csv,text/plain"
           onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
         <Button tone="paper" emphasis="primary" aria-describedby={hintId} disabled={reading} onClick={() => input.current?.click()}>
           {readFile.isPending ? `Reading ${readFile.variables?.name ?? 'file'}…` : 'Choose a file to read'}
@@ -129,7 +132,7 @@ function FileSource({ onRead }: { onRead: (r: Read) => void }) {
       {formats.data?.some((f) => f.how) && (
         <details className="text-sm text-ink-muted">
           <summary className="cursor-pointer py-1 voice-semi text-ink">Where each app keeps its export</summary>
-          <dl className="mt-1 flex max-w-[62ch] flex-col @container">
+          <dl className="mt-1 flex max-w-measure-body flex-col @container">
             {formats.data.filter((f) => f.how).map((f) => (
               <div key={f.id} className="ruled grid gap-x-4 py-1.5 @[24rem]:grid-cols-[8rem_minmax(0,1fr)]">
                 <dt className="voice-semi font-medium text-ink">{f.name}</dt>
@@ -199,7 +202,7 @@ function MoxfieldSource({ onRead }: { onRead: (r: Read) => void }) {
         <span className="text-sm normal-case voice-semi font-normal text-ink-muted">read in this browser by the companion</span>
       </h3>
       {(!ready || !moxOn) && (
-        <p className="max-w-[62ch] py-1 text-md leading-relaxed text-ink">
+        <p className="max-w-measure-body py-1 text-md leading-relaxed text-ink">
           {!ready
             ? c.status === 'checking' ? 'Looking for the browser companion…' : 'Set up the browser companion first — the plug icon at the top of the app.'
             : ALLOW_ACCESS_HINT}
@@ -231,9 +234,8 @@ function MoxfieldSource({ onRead }: { onRead: (r: Read) => void }) {
         <SourceRow title="A shared link" note="A collection or binder someone shared (Public or Unlisted on Moxfield) — read without signing in.">
           <form className="mt-1 flex w-full flex-wrap items-start gap-2" onSubmit={(e) => { e.preventDefault(); if (linkKind && !off) readMx.mutate({ url: link.trim() }); }}>
             <span className="flex min-w-0 flex-1 basis-[18rem] flex-col gap-1">
-              <input type="url" aria-label="Moxfield collection or binder link" value={link} onChange={(e) => setLink(e.target.value)}
-                placeholder="https://moxfield.com/binders/…" aria-invalid={Boolean(link.trim() && !linkKind)} aria-describedby={link.trim() && !linkKind ? linkErr : undefined}
-                className="h-9 w-full rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent aria-invalid:border-danger" />
+              <TextInput tone="paper" type="url" aria-label="Moxfield collection or binder link" value={link} onChange={(e) => setLink(e.target.value)}
+                placeholder="https://moxfield.com/binders/…" aria-invalid={Boolean(link.trim() && !linkKind)} aria-describedby={link.trim() && !linkKind ? linkErr : undefined} />
               {link.trim() && !linkKind && <span id={linkErr} className="text-xs text-danger">Paste a moxfield.com/collection/… or moxfield.com/binders/… link.</span>}
             </span>
             <Button type="submit" tone="paper" disabled={off || !linkKind}>{label('url', 'Read link')}</Button>
@@ -252,7 +254,7 @@ function SourceRow({ title, note, action, children }: { title: string; note: str
     <li className="ruled flex flex-wrap items-center gap-x-4 gap-y-1 px-1 py-2.5">
       <span className="flex min-w-0 flex-1 basis-[20rem] flex-col gap-0.5">
         <span className="text-md voice-semi font-medium text-ink">{title}</span>
-        <span className="max-w-[62ch] text-sm leading-snug text-ink-muted">{note}</span>
+        <span className="max-w-measure-body text-sm leading-snug text-ink-muted">{note}</span>
       </span>
       {action}
       {children && <div className="w-full">{children}</div>}
@@ -283,24 +285,23 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1">
         <h3 className="text-lg voice-condensed font-bold uppercase">{title}</h3>
         <span className="text-sm tabular text-ink-muted">{fmtInt(p.rows.length)} {p.rows.length === 1 ? 'printing' : 'printings'}</span>
-        <button type="button" onClick={onBack} disabled={busy}
-          className="inline-flex cursor-pointer disabled:cursor-default disabled:opacity-50 items-center gap-0.5 self-center rounded-sm px-1 text-sm voice-semi font-medium text-accent-ink underline decoration-1 underline-offset-2 hover:decoration-2">
-          <Chevron dir="left" className="size-3.5" />
+        <Button tone="paper" emphasis="link" onClick={onBack} disabled={busy} className="self-center text-sm">
+          <Chevron dir="left" className="mr-0.5 inline size-icon-xs align-text-bottom" />
           Read something else
-        </button>
+        </Button>
       </div>
 
       <fieldset className="flex flex-col py-1" disabled={busy}>
         <legend className="sr-only">How to import</legend>
         {MODES.map((m) => (
           <label key={m.mode} className="ruled flex cursor-pointer items-start gap-3 px-1 py-2">
-            <input type="radio" name="mx-mode" checked={mode === m.mode} onChange={() => onMode(m.mode)} className="mt-1 accent-accent" />
+            <span className="mt-0.5 flex"><Check type="radio" name="mx-mode" checked={mode === m.mode} onChange={() => onMode(m.mode)} /></span>
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="flex flex-wrap items-baseline justify-between gap-x-4">
                 <span className="text-md voice-semi font-medium text-ink">{m.title}</span>
                 <span className="text-sm tabular text-ink">{effectLine(effects[m.mode])}</span>
               </span>
-              <span className="max-w-[62ch] text-xs leading-snug text-ink-muted">{m.note}</span>
+              <span className="max-w-measure-body text-xs leading-snug text-ink-muted">{m.note}</span>
             </span>
           </label>
         ))}
@@ -333,10 +334,11 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
 
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule pt-3">
         {dup && (
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-ink">
-            <input type="checkbox" checked={again} onChange={(e) => onAgain(e.target.checked)} className="accent-accent" />
-            You imported this exact read on {p.already_imported_at!.slice(0, 10)} — add it again anyway
-          </label>
+          <span className="text-sm text-ink">
+            <Check checked={again} onChange={onAgain}>
+              You imported this exact read on {p.already_imported_at!.slice(0, 10)} — add it again anyway
+            </Check>
+          </span>
         )}
         {error != null && <FailureNote error={error} />}
         <Button tone="paper" emphasis="primary" className="ml-auto" onClick={onImport}

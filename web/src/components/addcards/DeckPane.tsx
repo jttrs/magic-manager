@@ -6,6 +6,9 @@ import type { PreconOptionOut, ResolveOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 import { DECK_SITES, deckFacts, productOwned, readDeckQuery, type DeckQuery } from '../../core/ingest';
 import { Button } from '../Button';
+import { SelectInput } from '../controls/Select';
+import { NumberField, TextInput } from '../controls/TextField';
+import { LinkMark } from '../icons/marks';
 import { useBrowserDeck } from '../../app/useBrowserDeck';
 import { DeckSourceHealth } from '../DeckSourceHealth';
 import { AwaitingNote, FailureNote } from '../companion/CompanionNotes';
@@ -32,7 +35,9 @@ export function DeckPane({ onFetched }: { onFetched: (r: ResolveOut) => void }) 
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
         Deck link or product
-        <input
+        <span className="max-w-2xl">
+        <TextInput
+          tone="paper"
           type="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -40,8 +45,8 @@ export function DeckPane({ onFetched }: { onFetched: (r: ResolveOut) => void }) 
           placeholder="https://moxfield.com/decks/…  or  Final Fantasy, fic, Commander Deck…"
           aria-describedby={hintId}
           aria-invalid={query.kind === 'link' || undefined}
-          className="h-10 max-w-2xl rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent aria-[invalid]:border-danger"
         />
+        </span>
       </label>
       <p id={hintId} className={`-mt-1 text-xs ${query.kind === 'link' ? 'text-danger' : 'text-ink-muted'}`}>
         {query.kind === 'link'
@@ -169,10 +174,7 @@ function DeckLink({ query, onFetched, onStarted, reader }: { query: DeckLinkQuer
 function LinkTile() {
   return (
     <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xs border border-rule bg-paper-sunk text-ink-muted">
-      <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <path d="M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2L10 5.8" />
-        <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l1.1-1.1" />
-      </svg>
+      <LinkMark className="size-5" />
     </span>
   );
 }
@@ -246,13 +248,13 @@ function ProductRow({ p, open, onOpen }: { p: PreconOptionOut; open: boolean; on
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-xs voice-semi text-ink-muted">
               Copies
-              <input type="number" min={1} max={50} value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="h-8 w-16 rounded-sm border border-rule bg-paper-raised px-1.5 text-right text-sm tabular text-ink focus-visible:border-accent" />
+              <NumberField min={1} max={50} value={copies} onChange={setCopies} />
             </label>
             <label className="flex flex-col gap-1 text-xs voice-semi text-ink-muted">
               Keep it
-              <select value={state} onChange={(e) => setState(e.target.value as typeof state)} className="h-8 cursor-pointer rounded-sm border border-rule bg-paper-raised px-2 text-sm text-ink focus-visible:border-accent">
+              <SelectInput value={state} onChange={(e) => setState(e.target.value as typeof state)}>
                 {STATES.map((s) => <option key={s.value} value={s.value}>{s.value === 'auto' ? `Suggested (${p.default_state === 'built' ? 'keep assembled' : 'just the cards'})` : s.label}</option>)}
-              </select>
+              </SelectInput>
             </label>
             <Button tone="paper" emphasis="primary" onClick={add} disabled={running} className="ml-auto">{running ? 'Adding…' : `Add ${copies > 1 ? `${fmtInt(copies)} copies` : 'to collection'}`}</Button>
           </div>

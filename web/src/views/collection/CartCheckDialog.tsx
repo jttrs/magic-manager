@@ -5,6 +5,8 @@ import { useFeature, useOwnerPath } from '../../app/features';
 import { cartSetupQuery, unwrap } from '../../app/queries';
 import { useCompanion } from '../../app/useCompanion';
 import { Button } from '../../components/Button';
+import { TextArea } from '../../components/controls/Select';
+import { dialogContentClass, dialogOverlayClass } from '../../components/controls/surfaces';
 import { AwaitingNote, BookmarkletLink, FailureNote } from '../../components/companion/CompanionNotes';
 import { SetUpCompanionButton } from '../../components/companion/CompanionSetup';
 import { cartCheck, cartLines, companionBookmarklet, type CartAuditOut } from '../../core/api';
@@ -26,8 +28,8 @@ export function CartCheckDialog({ trigger, family }: { trigger: ReactNode; famil
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(48rem,calc(100dvh-1.5rem))] w-[min(46rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('lg', 'frame')}>
           {open && <CartCheck family={family} />}
         </Dialog.Content>
       </Dialog.Portal>
@@ -46,7 +48,7 @@ const READS: Record<CartStore, string> = {
   tcgplayer: 'The companion reads your cart page on tcgplayer.com — cards, conditions, quantities and prices, never the sellers — and shows you the lines before anything is sent.',
   cardkingdom: 'The companion reads your cart page on cardkingdom.com — cards, grades, quantities and prices — and shows you the lines before anything is sent.',
 };
-const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-[0.04em] text-ink';
+const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-caps-tight text-ink';
 
 function CartCheck({ family }: { family?: string }) {
   const companionOn = useFeature('companion');
@@ -117,14 +119,14 @@ function CartCheck({ family }: { family?: string }) {
                 <h3 id="cart-companion" className={H3}>In this browser</h3>
                 {c.status === 'ready' ? (
                   <>
-                    <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">{READS[store]}</p>
-                    {!allowed && <p role="status" className="max-w-[62ch] text-md leading-relaxed text-ink">{cartSwitchHint(store)}</p>}
+                    <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">{READS[store]}</p>
+                    {!allowed && <p role="status" className="max-w-measure-body text-md leading-relaxed text-ink">{cartSwitchHint(store)}</p>}
                   </>
                 ) : c.status === 'checking' ? (
-                  <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Looking for the browser companion…</p>
+                  <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">Looking for the browser companion…</p>
                 ) : (
                   <>
-                    <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Set up the browser companion first: it reads your cart page in this browser.</p>
+                    <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">Set up the browser companion first: it reads your cart page in this browser.</p>
                     <SetUpCompanionButton />
                   </>
                 )}
@@ -137,18 +139,17 @@ function CartCheck({ family }: { family?: string }) {
             )}
             {store === 'manapool' && <section aria-labelledby="cart-bookmarklet" className="flex flex-col gap-2">
               <h3 id="cart-bookmarklet" className={H3}>With the bookmarklet</h3>
-              <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+              <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">
                 No install: drag this to your bookmarks bar, click it on your Mana Pool cart page, then paste here. It copies only the cart’s cards, quantities, finishes and prices.
               </p>
               {bookmarklet.data && <BookmarkletLink href={bookmarklet.data.href} label="mm · Mana Pool cart" />}
               <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
                 Paste what it copied
-                <textarea
+                <TextArea
                   value={paste}
                   onChange={(e) => setPaste(e.target.value)}
                   rows={3}
                   spellCheck={false}
-                  className="rounded-sm border border-rule-strong bg-paper-raised px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-muted focus-visible:border-accent"
                   placeholder='{"source":"manapool-cart-page", …}'
                 />
               </label>
@@ -160,7 +161,7 @@ function CartCheck({ family }: { family?: string }) {
             {store === 'manapool' && serverLogin && setup.data?.account && (
               <section aria-labelledby="cart-account" className="flex flex-col gap-2">
                 <h3 id="cart-account" className={H3}>With your login on this computer</h3>
-                <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Uses the Mana Pool login in this computer’s .env file. Only works where the app runs on your own computer.</p>
+                <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">Uses the Mana Pool login in this computer’s .env file. Only works where the app runs on your own computer.</p>
                 <Button tone="paper" className="self-start" onClick={() => viaAccount.mutate()} disabled={busy}>
                   {viaAccount.isPending ? 'Reading your cart…' : 'Read with my login'}
                 </Button>
@@ -201,7 +202,7 @@ function Results({ r }: { r: CartAuditOut }) {
         ))}
       </Section>
       {(r.not_compared ?? 0) > 0 && (
-        <p className="-mt-3 max-w-[62ch] text-sm text-ink-muted">
+        <p className="-mt-3 max-w-measure-body text-sm text-ink-muted">
           {fmtCount(r.not_compared ?? 0, 'played or non-English line')} left out — market prices are Near Mint English.
         </p>
       )}
@@ -233,7 +234,7 @@ function Results({ r }: { r: CartAuditOut }) {
 function Section({ title, n, meta, empty, children }: { title: string; n: number; meta?: string; empty?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1" aria-label={title}>
-      <h3 className="flex items-baseline gap-2 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
+      <h3 className="flex items-baseline gap-2 text-sm voice-condensed font-medium uppercase tracking-caps text-ink-muted">
         {title} · {fmtInt(n)}
         {meta && <span className="normal-case tracking-normal tabular">{meta}</span>}
       </h3>
@@ -270,7 +271,7 @@ function StoreSwitch({ value, onChange, disabled }: { value: CartStore; onChange
         <ToggleGroup.Item
           key={s}
           value={s}
-          className="min-h-9 min-w-0 truncate rounded-xs px-2 text-sm voice-semi text-ink-muted cursor-pointer transition-colors ease-guide hover:text-ink disabled:cursor-not-allowed disabled:opacity-45 data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+          className="min-h-control min-w-0 truncate rounded-xs px-2 text-sm voice-semi text-ink-muted cursor-pointer transition-colors ease-guide hover:text-ink disabled:cursor-not-allowed disabled:opacity-45 data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           {CART_STORE_NAME[s]}
         </ToggleGroup.Item>

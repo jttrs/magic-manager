@@ -10,6 +10,8 @@ import { accountDelete, accountExport } from '../../core/api';
 import { ApiError, apiErrorFrom } from '../../core/apiError';
 import { Button } from '../Button';
 import { buttonClass } from '../buttonClass';
+import { dialogContentClass, dialogOverlayClass, dialogTitleClass } from '../controls/surfaces';
+import { TextInput } from '../controls/TextField';
 import { SettingsRow } from '../settings/SettingsControls';
 
 /** Registers Settings → Account: *Download my data* (both modes) and, hosted, *Delete my account*. */
@@ -123,9 +125,9 @@ function DeleteDialog() {
 
   return (
     <AlertDialog.Portal>
-      <AlertDialog.Overlay className="fixed inset-0 z-50 bg-scrim backdrop-blur-[1px]" />
-      <AlertDialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[min(32rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
-        <AlertDialog.Title className="border-b-2 border-rule-strong pb-2 text-2xl voice-condensed font-bold leading-none">
+      <AlertDialog.Overlay className={dialogOverlayClass} />
+      <AlertDialog.Content className={dialogContentClass('sm')}>
+        <AlertDialog.Title className={dialogTitleClass}>
           Delete your account
         </AlertDialog.Title>
         <AlertDialog.Description asChild>
@@ -140,7 +142,8 @@ function DeleteDialog() {
             <label htmlFor={inputId} className="text-sm text-ink-muted">
               Type <span className="font-semibold text-ink">{DELETE_PHRASE}</span> to confirm
             </label>
-            <input
+            <TextInput
+              tone="paper"
               id={inputId}
               value={text}
               autoComplete="off"
@@ -149,7 +152,6 @@ function DeleteDialog() {
               disabled={busy}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && ok && !busy) void remove(); }}
-              className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
             />
           </div>
         ) : (

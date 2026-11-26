@@ -8,8 +8,12 @@ import { cardCombosQuery, deckCombosQuery } from '../app/queries';
 import type { CardCombosOut, ComboOut, DeckCombosOut, PieceOut, PrintingOut } from '../core/api';
 import { decksLine, deckCombosSummary, nearMisses, ownNote, piecesOwned, producesLine, steps, type NearMiss } from '../core/combos';
 import { fmtCount, fmtUsd } from '../core/format';
-import { Chevron } from './Chevron';
-import { SpellbookMark } from './StoreMarks';
+import { Chevron } from './icons/Chevron';
+import { AddCardMark, SpellbookMark } from './icons/marks';
+import { Button } from './Button';
+import { IconAction } from './IconAction';
+import { Pressable } from './controls/Pressable';
+import { dialogContentClass, dialogOverlayClass } from './controls/surfaces';
 
 type Inspect = (p: PrintingOut) => void;
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
@@ -46,7 +50,7 @@ function ComboHow({ combo }: { combo: ComboOut }) {
         </ol>
       )}
       <a href={combo.url} target="_blank" rel="noreferrer" title="Open on Commander Spellbook" className="-ml-2 inline-flex min-h-8 items-center gap-1.5 self-start rounded-sm px-2 text-sm voice-semi font-medium text-accent-ink no-underline transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk">
-        <SpellbookMark className="size-4" /> Commander Spellbook<span className="sr-only">(opens in a new tab)</span>
+        <SpellbookMark className="size-icon-sm" /> Commander Spellbook<span className="sr-only">(opens in a new tab)</span>
       </a>
     </div>
   );
@@ -66,10 +70,10 @@ function Disclosure({ head, children, label }: { head: ReactNode; children: Reac
   const id = useId();
   return (
     <>
-      <button type="button" aria-expanded={open} aria-controls={id} aria-label={label} onClick={() => setOpen(!open)} className="flex w-full min-w-0 cursor-pointer items-start gap-2 rounded-xs py-1.5 text-left hover:bg-paper-sunk focus-visible:bg-paper-sunk">
-        <Chevron dir={open ? 'down' : 'right'} className="mt-1 size-3.5 shrink-0 text-ink-muted" />
+      <Pressable aria-expanded={open} aria-controls={id} aria-label={label} onClick={() => setOpen(!open)} className="flex w-full min-w-0 items-start gap-2 rounded-xs py-1.5 hover:bg-paper-sunk focus-visible:bg-paper-sunk">
+        <Chevron dir={open ? 'down' : 'right'} className="mt-1 size-icon-xs shrink-0 text-ink-muted" />
         <span className="flex min-w-0 flex-1 flex-col">{head}</span>
-      </button>
+      </Pressable>
       {open && <div id={id}>{children}</div>}
     </>
   );
@@ -106,18 +110,18 @@ function NearMissLine({ nm, onAdd, onInspect }: { nm: NearMiss; onAdd?: (p: Prin
         {img ? <img src={img} alt="" loading="lazy" decoding="async" className="size-10 shrink-0 rounded-xs object-cover" /> : <span aria-hidden="true" className="size-10 shrink-0 rounded-xs border border-rule bg-paper-sunk" />}
         <span className="flex min-w-0 flex-1 flex-col">
           {pr && onInspect ? (
-            <button type="button" onClick={() => onInspect(pr)} className="min-w-0 cursor-pointer self-start truncate text-left text-md voice-semi font-medium text-ink underline-offset-4 decoration-rule-strong hover:underline focus-visible:underline">{piece.name}</button>
+            <Pressable onClick={() => onInspect(pr)} className="min-w-0 self-start truncate text-md voice-semi font-medium text-ink underline-offset-4 decoration-rule-strong hover:underline focus-visible:underline">{piece.name}</Pressable>
           ) : <span className="truncate text-md voice-semi font-medium text-ink">{piece.name}</span>}
           <span className="truncate text-xs tabular text-ink-muted">
-            <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} className="cursor-pointer text-ink underline decoration-rule-strong underline-offset-2 hover:decoration-ink">
+            <Button tone="paper" emphasis="link" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
               Completes {fmtCount(nm.combos.length, 'combo')}
-            </button>
+            </Button>
             {' · '}<span className={own.free ? 'text-accent-ink' : ''}>{own.text}</span>
             {' · '}from {fmtUsd(piece.facts.lowest_usd)}
           </span>
         </span>
         {onAdd && pr && (
-          <button type="button" aria-label={`Add ${piece.name}`} onClick={() => onAdd(pr)} className="touch-hit grid size-9 shrink-0 cursor-pointer place-items-center rounded-sm text-xl text-accent-ink hover:bg-paper-sunk">+</button>
+          <IconAction label={`Add ${piece.name}`} Icon={AddCardMark} onClick={() => onAdd(pr)} />
         )}
       </div>
       {open && (
@@ -133,7 +137,7 @@ function NearMissLine({ nm, onAdd, onInspect }: { nm: NearMiss; onAdd?: (p: Prin
 
 function Head({ children, count }: { children: ReactNode; count: string }) {
   return (
-    <h3 className="mt-4 flex items-baseline gap-2 border-b-2 border-rule-strong pb-0.5 text-lg voice-condensed font-bold uppercase tracking-[0.04em] text-ink first:mt-0">
+    <h3 className="mt-4 flex items-baseline gap-2 border-b-2 border-rule-strong pb-0.5 text-lg voice-condensed font-bold uppercase tracking-caps-tight text-ink first:mt-0">
       {children}<span className="ml-auto text-sm font-regular normal-case tracking-normal tabular text-ink-muted">{count}</span>
     </h3>
   );
@@ -173,8 +177,8 @@ export function DeckCombosDialog({ slug, deckName, trigger }: { slug: string; de
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(44rem,calc(100dvh-1.5rem))] w-[min(40rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={dialogContentClass('md', 'frame')}>
           <header className="flex items-start gap-3 border-b-2 border-rule-strong px-5 pb-2 pt-4">
             <div className="min-w-0 flex-1">
               <Dialog.Title className="text-2xl voice-condensed font-bold leading-none">Combos</Dialog.Title>

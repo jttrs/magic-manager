@@ -4,6 +4,8 @@ import { useMemo, useState, type ComponentType, type ReactNode, type SVGProps } 
 import { compareQuery, exploreCardQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
+import { Button } from '../components/Button';
+import { Pressable } from '../components/controls/Pressable';
 import { CardInspector } from '../components/CardInspector';
 import { CommanderPicker, type PickedCard } from '../components/CommanderPicker';
 import { GuideColumns, type Column } from '../components/GuideColumns';
@@ -13,7 +15,7 @@ import { ChipToggles, Segmented, SideSection, TextField } from '../components/Si
 import { GroupControl, SortControl, ViewToggle } from '../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { CardCombos } from '../components/Combos';
-import { ComboMark, EdhrecMark, ScryfallMark } from '../components/StoreMarks';
+import { ComboMark, EdhrecMark, ScryfallMark } from '../components/icons/marks';
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import type { CardExploreOut, CardProfileOut, CompareOut, OracleTagOut } from '../core/api';
 import { bucketCards, COMPARE_SORT, COMPARE_SORT_PRESETS, matches, tagCounts, tagLabel } from '../core/compare';
@@ -109,9 +111,9 @@ export function ExploreView() {
           <CommanderPicker scope="any" name="card-a" label="Card" value={search.a} onCommit={(a, p) => { setPicked(p ?? null); set({ a }); }} />
           <CommanderPicker scope="any" name="card-b" label="Compare with" placeholder="Add a second card…" value={search.b} onCommit={(b) => set({ b })} />
           {search.b && (
-            <button type="button" onClick={() => set({ b: undefined })} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
+            <Button emphasis="link" onClick={() => set({ b: undefined })} className="self-start text-sm">
               Stop comparing
-            </button>
+            </Button>
           )}
         </div>
       </SideSection>
@@ -302,13 +304,13 @@ function Plate({ p, role, side, compact = false, onInspect, combosOpen, onCombos
   const edhrec = `https://edhrec.com/${role === 'commander' && p.commander_eligible ? 'commanders' : 'cards'}/${p.slug}`;
   return (
     <section aria-label={cleanName(p.name)} className="flex min-w-0 gap-4">
-      <button type="button" onClick={() => onInspect(p)} aria-label={`Inspect ${cleanName(p.name)}`} className={`shrink-0 cursor-pointer self-start ${compact ? 'w-[4.5rem] sm:w-[5.5rem]' : 'w-[6.5rem] sm:w-[7.5rem]'}`}>
+      <Pressable onClick={() => onInspect(p)} aria-label={`Inspect ${cleanName(p.name)}`} className={`shrink-0 self-start ${compact ? 'w-[4.5rem] sm:w-[5.5rem]' : 'w-[6.5rem] sm:w-[7.5rem]'}`}>
         {f.image_uri ? (
-          <img src={f.image_uri} alt="" width={488} height={680} className="aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_8px_20px_-12px_var(--theme-scrim)]" />
+          <img src={f.image_uri} alt="" width={488} height={680} className="aspect-card h-auto w-full rounded-card bg-paper-sunk shadow-[0_8px_20px_-12px_var(--theme-scrim)]" />
         ) : (
-          <span className="grid aspect-[488/680] w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-2 text-center text-xs text-ink-muted">{p.name}</span>
+          <span className="grid aspect-card w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-2 text-center text-xs text-ink-muted">{p.name}</span>
         )}
-      </button>
+      </Pressable>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-baseline gap-2">
           {side && <span className="shrink-0 rounded-xs border border-rule-strong px-1 text-xs voice-condensed font-bold text-ink-muted">{side}</span>}
@@ -334,10 +336,10 @@ function Plate({ p, role, side, compact = false, onInspect, combosOpen, onCombos
         <nav aria-label={`${cleanName(p.name)} elsewhere`} className="-ml-2 mt-auto flex flex-wrap gap-x-1">
           <OutLink href={edhrec} label="EDHREC" Mark={EdhrecMark} />
           {f.scryfall_url && <OutLink href={f.scryfall_url} label="Scryfall" Mark={ScryfallMark} />}
-          <button type="button" aria-expanded={combosOpen} aria-controls="card-combos" onClick={onCombos} className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk aria-expanded:bg-paper-sunk">
-            <ComboMark className="size-4" />
+          <Pressable aria-expanded={combosOpen} aria-controls="card-combos" onClick={onCombos} className="inline-flex min-h-8 items-center gap-1.5 rounded-sm px-2 text-sm voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk aria-expanded:bg-paper-sunk">
+            <ComboMark className="size-icon-sm" />
             {combosOpen ? 'Hide combos' : 'Combos'}
-          </button>
+          </Pressable>
         </nav>
       </div>
     </section>
@@ -390,8 +392,8 @@ function TagSplit({ tags, a, b }: { tags: Record<string, OracleTagOut[]>; a: str
 function BarLegend({ a, b, metric }: { a: string; b: string; metric: string }) {
   return (
     <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
-      <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded-pill bg-rule-strong" />{a} (top)</span>
-      <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded-pill bg-ink-muted" />{b} (bottom)</span>
+      <span className="flex items-center gap-1.5"><span className="h-bar w-5 rounded-pill bg-rule-strong" />{a} (top)</span>
+      <span className="flex items-center gap-1.5"><span className="h-bar w-5 rounded-pill bg-ink-muted" />{b} (bottom)</span>
       <span>bars = {metric}</span>
     </p>
   );

@@ -1,5 +1,5 @@
 import type { CopyTarget } from './CopyButton';
-import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from './StoreMarks';
+import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from './icons/marks';
 
 export type BuyStore = 'manapool' | 'tcgplayer' | 'cardkingdom';
 
