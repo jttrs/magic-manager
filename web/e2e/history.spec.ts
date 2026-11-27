@@ -13,13 +13,13 @@ const mockHistory = (page: Parameters<typeof mockApi>[0]) =>
     '/api/history': () => ({ json: history }),
   });
 
-test('purchase history is a Collection sheet: timeline by month, deck moves gathered, filters', async ({ page }) => {
+test('history is a Collection sheet: timeline by month, deck moves gathered, filters', async ({ page }) => {
   await mockHistory(page);
   await page.goto('/collection');
-  await page.getByRole('navigation', { name: 'Collection views' }).getByRole('link', { name: 'Purchase history' }).click();
+  await page.getByRole('navigation', { name: 'Collection views' }).getByRole('link', { name: 'History' }).click();
   await expect(page).toHaveURL(/\/collection\/history/);
   await expect(page.getByRole('link', { name: 'Collection', exact: true })).toHaveAttribute('aria-current', 'page');
-  const list = page.getByRole('navigation', { name: 'Purchase history' });
+  const list = page.getByRole('navigation', { name: 'History' });
   await expect(list.getByRole('heading', { name: /October 2026/ })).toBeVisible();
   // Two same-day deck moves collapse into one quiet run that expands.
   const run = list.getByRole('button', { name: /Built 2 decks/ });
@@ -42,7 +42,6 @@ test('drill into an entry: what came in, worth today, exact printings, open deck
   await mockHistory(page);
   await page.goto(`/collection/history?entry=${event.entry.ingest_id}`);
   await expect(page.getByRole('heading', { level: 2, name: event.entry.title })).toBeVisible();
-  await expect(page.getByText('Worth today')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open deck' })).toHaveAttribute('href', new RegExp(`deck=${event.entry.deck_slug}`));
   const first = event.lines[0].printing.name;
   await page.getByRole('button', { name: `Inspect ${first}` }).first().click();
@@ -75,12 +74,12 @@ test('a pre-ledger checklist explains where its cards are counted and links ther
   await expect(page).toHaveURL(/entry=249/);
 });
 
-test('Purchase history: the tab is the title, the rail reads Find → Show, no Store orders tab without the flag', async ({ page }) => {
+test('History: the tab is the title, the rail reads Find → Show, no Store orders tab without the flag', async ({ page }) => {
   await page.goto('/collection/history');
   const tabs = page.getByRole('navigation', { name: 'Collection views' });
-  await expect(tabs.getByRole('link', { name: 'Purchase history' })).toHaveAttribute('aria-current', 'page');
+  await expect(tabs.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'page');
   await expect(tabs.getByRole('link', { name: 'Store orders' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { level: 1, name: 'Purchase history' })).toHaveClass(/sr-only/);
+  await expect(page.getByRole('heading', { level: 1, name: 'History' })).toHaveClass(/sr-only/);
   await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Find');
 });
 

@@ -5,7 +5,7 @@ type Props = {
   label: ReactNode;
   /** Right-aligned tabular detail: a count, `12 recipes · 3 ready`, … */
   meta?: ReactNode;
-  /** `accent` marks a group that needs attention (Purchase history's *Needs review*). */
+  /** `accent` marks a group that needs attention (History's *Needs review*). */
   tone?: 'muted' | 'accent';
   as?: 'h2' | 'h3';
   id?: string;

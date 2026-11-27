@@ -51,7 +51,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { 
       <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
           <Pressable onClick={onBack} className="inline-flex w-full items-center gap-0.5 text-sm voice-semi text-accent-ink">
-            <Chevron dir="left" className="size-3.5" /> Purchase history
+            <Chevron dir="left" className="size-3.5" /> History
           </Pressable>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">

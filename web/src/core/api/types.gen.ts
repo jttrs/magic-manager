@@ -3685,6 +3685,28 @@ export type HistoryEventOut = {
 };
 
 /**
+ * HistoryKindOut
+ */
+export type HistoryKindOut = {
+    /**
+     * Kind
+     */
+    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move' | 'purchase' | 'revert';
+    /**
+     * Label
+     *
+     * The kind's one name: filter option, row sub-label, detail header.
+     */
+    label: string;
+    /**
+     * Help
+     *
+     * One line saying what the kind covers (the ⓘ).
+     */
+    help: string;
+};
+
+/**
  * HistoryLineOut
  */
 export type HistoryLineOut = {
@@ -3719,6 +3741,12 @@ export type HistoryOut = {
      * Entries
      */
     entries: Array<HistoryEntryOut>;
+    /**
+     * Kinds
+     *
+     * Every kind in display order (provenance.KIND_META).
+     */
+    kinds: Array<HistoryKindOut>;
     /**
      * Prices As Of
      *

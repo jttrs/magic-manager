@@ -190,7 +190,7 @@ def registry() -> list[Scraper]:
     # Order history pages are signed in: no public sample → real use only (canary none).
     for site, name in ORDER_STORES.items():
         out.append(Scraper(f"companion-orders/{site}", "companion-orders", site, name,
-                           f"{name} order history read in your browser", "Purchase history · Read my orders", "none"))
+                           f"{name} order history read in your browser", "History · Read my orders", "none"))
     ed = samples.get("edhrec") or {}
     for scr, label, sample in (("edhrec-commander", "EDHREC commander pages", ed.get("commander")),
                                ("edhrec-card", "EDHREC card pages", ed.get("card")),

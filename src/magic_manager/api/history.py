@@ -1,4 +1,4 @@
-"""Purchase-history surface of the typed API: the acquisition timeline.
+"""History surface of the typed API: the acquisition timeline.
 
 Adapts :func:`magic_manager.provenance.history` / ``history_event`` — one entry
 per ledger ingest event (what came in, what it still accounts for, its value at
@@ -45,8 +45,15 @@ class HistoryEntryOut(BaseModel):
     reverts: int | None = Field(None, description="Revert entries: the entry they undid.")
 
 
+class HistoryKindOut(BaseModel):
+    kind: HistoryKind
+    label: str = Field(description="The kind's one name: filter option, row sub-label, detail header.")
+    help: str = Field(description="One line saying what the kind covers (the ⓘ).")
+
+
 class HistoryOut(BaseModel):
     entries: list[HistoryEntryOut]
+    kinds: list[HistoryKindOut] = Field(description="Every kind in display order (provenance.KIND_META).")
     prices_as_of: str | None = Field(description="Newest local price fetch date (YYYY-MM-DD).")
     stale_sets: list[str] = Field(description="Set codes whose local prices are older than a week (not refreshed).")
 
@@ -66,12 +73,13 @@ class HistoryEventOut(BaseModel):
 
 
 def _entry(h: provenance.HistoryEntry) -> HistoryEntryOut:
-    return HistoryEntryOut(**vars(h))
+    return HistoryEntryOut(**{k: v for k, v in vars(h).items() if not k.startswith("_")})
 
 
 def history() -> HistoryOut:
     h = provenance.history()
-    return HistoryOut(entries=[_entry(e) for e in h.entries], prices_as_of=h.prices_as_of, stale_sets=h.stale_sets)
+    return HistoryOut(entries=[_entry(e) for e in h.entries], kinds=[HistoryKindOut(kind=k, label=lab, help=hp) for k, lab, hp in provenance.KIND_META],
+                      prices_as_of=h.prices_as_of, stale_sets=h.stale_sets)
 
 
 def event(ingest_id: int) -> HistoryEventOut:

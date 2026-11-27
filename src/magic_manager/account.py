@@ -113,7 +113,7 @@ SHEETS: tuple[Sheet, ...] = (
                     l.unit_price_cents, l.added, l.matched, l.scryfall_id, p.ingest_id
               FROM purchases p LEFT JOIN purchase_lines l ON l.purchase_id = p.purchase_id
               ORDER BY p.ordered_at, p.store, p.store_order_id, l.line_no"""),
-    Sheet("history.csv", "every import and change to your collection (the purchase history)",
+    Sheet("history.csv", "every import and change to your collection (what the History view shows)",
           """SELECT ingest_id, at, method, label, mode, status, rows_added, rows_updated, rows_zeroed,
                     reverts_ingest_id, notes
               FROM ingest_events ORDER BY ingest_id"""),

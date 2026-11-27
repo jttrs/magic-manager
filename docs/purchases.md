@@ -6,7 +6,7 @@ pinned "Order history → Purchase history" follow-up (`docs/browser-companion.m
 
 ## What it does
 
-1. **Read** — Collection → Purchase history → *Read my orders* (header action). Pick a store; the browser companion
+1. **Read** — Collection → History → *Read my orders* (header action). Pick a store; the browser companion
    reads your **order list** in your own browser (click-to-read, you approve in its window). The app
    marks each order: not read / read, not added / partly added / in your collection / recorded only.
    Tick orders (or *Read all*); the companion reads those orders' lines and, after you approve, the
@@ -16,7 +16,7 @@ pinned "Order history → Purchase history" follow-up (`docs/browser-companion.m
    *Add N cards to your collection*, adds every single with a known printing that isn't in yet.
    Sealed products and other lines are recorded only, never added. Copies are **not** tied to
    orders (the old per-line "match to cards I own" is retired — nobody tracks that).
-3. **See** — store orders live in Purchase history (no separate tab): orders not fully added are
+3. **See** — store orders live in History (no separate tab): orders not fully added are
    pinned under **Needs review** with Paid / Worth today / gain or loss; an applied order is one
    **Store order** timeline entry (its ledger event, with what you paid); the sheet summary carries
    the total paid vs. what the whole collection is worth now (a rough return).

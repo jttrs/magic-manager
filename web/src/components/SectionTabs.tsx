@@ -37,7 +37,7 @@ const TONE = {
 } as const;
 
 /**
- * A section's modes (Collection: Cards · Purchase history; Explore: Rankings ·
+ * A section's modes (Collection: Cards · History; Explore: Rankings ·
  * Cards · Surfer). One look for every section that has modes.
  *
  * Put it in `ViewLayout`'s `subnav` slot — `<ViewLayout subnav={<SectionTabs

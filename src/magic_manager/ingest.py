@@ -405,6 +405,8 @@ def rebuild_inventory_from_ledger(conn) -> dict:
 
 # Label prefix of every web Add cards commit (``addcards.commit``: ``web:<source>[ · label]``).
 WEB_LABEL_PREFIX = "web:"
+# Label prefix of a census reconciliation event (``census.py``); History titles read it.
+CENSUS_LABEL_PREFIX = "census:"
 
 
 def deck_import_linkable(conn, ingest_id: int) -> bool:

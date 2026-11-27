@@ -7,7 +7,7 @@ export const DELETE_PHRASE = 'delete my account';
 
 /** What deleting does, in plain sentences (shown before the typed confirmation). */
 export const DELETE_CONSEQUENCES: readonly string[] = [
-  'Your collection, decks, wishlist, watchlist, purchase history and restore point are deleted from this server right away.',
+  'Your collection, decks, wishlist, watchlist, history and restore point are deleted from this server right away.',
   'Your sign-in is removed and you’re signed out everywhere. Invites you made that nobody used stop working.',
   'Error and usage records tied to you are deleted.',
   'The server’s offsite backups keep a copy until they age out on their own schedule (about 30 days).',

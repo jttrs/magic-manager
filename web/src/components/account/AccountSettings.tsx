@@ -26,7 +26,7 @@ export function AccountSettings() {
       <>
         <SettingsRow
           label="Download my data"
-          description="One zip: a copy of your collection you can open with any SQLite tool, spreadsheets of your cards, decks, wishlist and purchase history, and a README."
+          description="One zip: a copy of your collection you can open with any SQLite tool, spreadsheets of your cards, decks, wishlist and history, and a README."
           control={({ labelId }) => <DownloadButton labelId={labelId} />}
         />
         {hosted && (

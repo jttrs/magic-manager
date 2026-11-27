@@ -1,7 +1,7 @@
-// Purchase history view-model: the acquisition timeline over the provenance ledger.
+// History view-model: the acquisition timeline over the provenance ledger.
 // Framework-free — filter, month grouping, deck-move runs, and the drill-in cards.
 import { z } from 'zod';
-import type { HistoryEntryOut, HistoryLineOut, PurchaseOut, RevertLineOut, RevertPlanOut } from './api';
+import type { HistoryEntryOut, HistoryKindOut, HistoryLineOut, PurchaseOut, RevertLineOut, RevertPlanOut } from './api';
 import { typeGroup, TYPE_GROUPS } from './cardFacts';
 import { fmtCount } from './format';
 import { fromPrinting, groupCards, type GuideCard, type GuideGroup } from './guideCard';
@@ -11,27 +11,13 @@ import { list } from './search';
 const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move', 'purchase', 'revert'] as const;
 export type HistoryKind = (typeof KINDS)[number];
 
-export const KIND_LABEL: Record<HistoryKind, string> = {
-  deck: 'Precon',
-  pool: 'Card pool',
-  singles: 'Singles',
-  checklist: 'Checklist',
-  unknown: 'Unknown',
-  move: 'Deck move',
-  purchase: 'Store order',
-  revert: 'Revert',
-};
+/** Kind labels and help come from the server (`GET /api/history` → `kinds`); an absent kind reads as its raw name. */
+export type KindMeta = { label: (k: HistoryKind) => string; help: (k: HistoryKind) => string };
 
-export const KIND_HELP: Record<HistoryKind, string> = {
-  deck: 'A playable product: a precon or Jumpstart pack you bought, or one Find products identified in your cards.',
-  pool: 'A card pool: land pack, scene box, Secret Lair drop and the like.',
-  singles: 'Cards added one by one: search, pasted lists, scans, by hand.',
-  checklist: 'A bulk checklist ingest. Which product the cards came out of was not recorded.',
-  unknown: 'Copies reconstructed when the ledger began, with no known source.',
-  move: 'Cards pledged to a built deck or released from one. What you own does not change.',
-  purchase: 'An order read from your store order history (Mana Pool, TCGplayer, Card Kingdom) with what you paid. Orders not in your collection yet wait under Needs review.',
-  revert: 'An import you took back out: the copies it added were removed (and any it removed put back). The original entry stays, marked reverted.',
-};
+export function kindMeta(kinds: readonly HistoryKindOut[] = []): KindMeta {
+  const by = new Map(kinds.map((k) => [k.kind, k]));
+  return { label: (k) => by.get(k)?.label ?? k, help: (k) => by.get(k)?.help ?? '' };
+}
 
 const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -54,7 +40,7 @@ export type HistoryFilters = Pick<HistorySearch, 'q' | 'kinds' | 'from' | 'to'>;
 
 const day = (at: string) => at.slice(0, 10);
 
-export function filterHistory(entries: readonly HistoryEntryOut[], f: HistoryFilters): HistoryEntryOut[] {
+export function filterHistory(entries: readonly HistoryEntryOut[], f: HistoryFilters, meta: KindMeta = kindMeta()): HistoryEntryOut[] {
   const q = f.q.trim().toLowerCase();
   return entries.filter((e) => {
     if (f.kinds.length && !f.kinds.includes(e.kind)) return false;
@@ -62,16 +48,31 @@ export function filterHistory(entries: readonly HistoryEntryOut[], f: HistoryFil
     if (f.from && d < f.from) return false;
     if (f.to && d > f.to) return false;
     if (!q) return true;
-    return [e.title, e.detail, e.product, e.set_code, KIND_LABEL[e.kind]].some((s) => s?.toLowerCase().includes(q));
+    return [e.title, e.detail, e.product, e.set_code, meta.label(e.kind)].some((s) => s?.toLowerCase().includes(q));
   });
 }
 
-/** Kinds present, in canonical order; `orders` = store orders shown outside the ledger entries (Needs review, recorded only). */
-export function kindCounts(entries: readonly HistoryEntryOut[], orders = 0): { value: HistoryKind; label: string; count: number }[] {
+/** Kinds present, in the server's order; `orders` = store orders shown outside the ledger entries (Needs review, recorded only).
+ *  Moves show one row per day (`groupTimeline` folds a day's moves), so the move count is the number of days with moves. */
+export function kindCounts(entries: readonly HistoryEntryOut[], orders: number, kinds: readonly HistoryKindOut[]): { value: HistoryKind; label: string; count: number }[] {
   const n = new Map<HistoryKind, number>();
-  for (const e of entries) n.set(e.kind, (n.get(e.kind) ?? 0) + 1);
+  const moveDays = new Set<string>();
+  for (const e of entries) {
+    if (e.kind === 'move') moveDays.add(day(e.at));
+    else n.set(e.kind, (n.get(e.kind) ?? 0) + 1);
+  }
+  if (moveDays.size) n.set('move', moveDays.size);
   if (orders) n.set('purchase', (n.get('purchase') ?? 0) + orders);
-  return KINDS.filter((k) => n.has(k)).map((k) => ({ value: k, label: KIND_LABEL[k], count: n.get(k)! }));
+  const meta = kindMeta(kinds);
+  // The server's order; an older payload without kinds still lists (and can clear) every kind.
+  const order: readonly HistoryKind[] = kinds.length ? kinds.map((k) => k.kind) : KINDS;
+  return order.filter((k) => n.has(k)).map((k) => ({ value: k, label: meta.label(k), count: n.get(k)! }));
+}
+
+/** How many rows the timeline shows for these entries: one per entry, but a day's moves fold into one row. */
+export function timelineRowCount(entries: readonly HistoryEntryOut[]): number {
+  const moveDays = new Set(entries.filter((e) => e.kind === 'move').map((e) => day(e.at)));
+  return entries.filter((e) => e.kind !== 'move').length + moveDays.size;
 }
 
 // ---------- store orders, merged into the timeline ----------
@@ -120,8 +121,8 @@ export function mergeOrders(entries: readonly HistoryEntryOut[], purchases: read
 
 export const orderTitle = (p: Pick<PurchaseOut, 'store_name' | 'order_id'>): string => `${p.store_name} order #${p.order_id}`;
 
-/** The same filters as the ledger entries: kind (Store order), order day, and text (store, order number, status). */
-export function filterOrders(orders: readonly PurchaseOut[], f: HistoryFilters): PurchaseOut[] {
+/** The same filters as the ledger entries: kind (Store orders), order day, and text (store, order number, status). */
+export function filterOrders(orders: readonly PurchaseOut[], f: HistoryFilters, meta: KindMeta = kindMeta()): PurchaseOut[] {
   if (f.kinds.length && !f.kinds.includes('purchase')) return [];
   const q = f.q.trim().toLowerCase();
   return orders.filter((p) => {
@@ -129,7 +130,7 @@ export function filterOrders(orders: readonly PurchaseOut[], f: HistoryFilters):
     if (f.from && d < f.from) return false;
     if (f.to && d > f.to) return false;
     if (!q) return true;
-    return [orderTitle(p), p.store_name, p.order_id, STATUS_LABEL[p.status], KIND_LABEL.purchase].some((s) => s.toLowerCase().includes(q));
+    return [orderTitle(p), p.store_name, p.order_id, STATUS_LABEL[p.status], meta.label('purchase')].some((s) => s.toLowerCase().includes(q));
   });
 }
 

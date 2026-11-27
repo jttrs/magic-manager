@@ -16,20 +16,20 @@ test('find products: scan, uncheck one, record the rest', async ({ page }) => {
   await page.route('**/api/jobs/a1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse({ ready: [product('A_HOB', 'Crack the Plates')], conflicts: [], applied: true, registered: 1, reattributed: 6 }) }));
 
   await page.goto('/collection/history');
-  await page.getByRole('toolbar', { name: 'Purchase history actions' }).getByRole('button', { name: 'Find products in your cards' }).click();
+  await page.getByRole('toolbar', { name: 'History actions' }).getByRole('button', { name: 'Find products in your cards' }).click();
   const dialog = page.getByRole('dialog', { name: 'Find products in your cards' });
   await expect(dialog.getByText('Your cards complete · 2')).toBeVisible();
   await expect(dialog).toContainText('its shared cards went to Crack the Plates');
   await dialog.getByRole('checkbox', { name: /Treasures of Smaug/ }).uncheck();
   await dialog.getByRole('button', { name: 'Record 1 product' }).click();
-  await expect(dialog).toContainText('Recorded 1 product in Purchase history, covering 6 cards.');
+  await expect(dialog).toContainText('Recorded 1 product in History, covering 6 cards.');
   expect(applied).toEqual({ expect: ['A_HOB'], picks: [] });
   expect(await page.evaluate(() => localStorage.getItem('mm.trueup.notMine'))).toBe('["B_HOB"]');
 });
 
 const open = async (page: import('@playwright/test').Page) => {
   await page.goto('/collection/history');
-  await page.getByRole('toolbar', { name: 'Purchase history actions' }).getByRole('button', { name: 'Find products in your cards' }).click();
+  await page.getByRole('toolbar', { name: 'History actions' }).getByRole('button', { name: 'Find products in your cards' }).click();
   return page.getByRole('dialog', { name: 'Find products in your cards' });
 };
 

@@ -15,7 +15,7 @@ net-zero, so balances stay exact). Each event classifies into a *source*:
 * **unknown** — the generic best-effort buckets (``backfill:precon``,
   ``unattributed-backfill``, ``migration-backfill``).
 
-A later removal is its own (negative) event; purchase history nets it with an
+A later removal is its own (negative) event; History nets it with an
 in-order ledger walk (``_held``), so what the events hold sums to what is owned.
 """
 from __future__ import annotations
@@ -145,7 +145,7 @@ def card_holdings(scryfall_id: str) -> Holdings:
     return h
 
 
-# ---------- purchase history: one entry per ingest event ----------
+# ---------- History: one entry per ingest event ----------
 #
 # The acquisition timeline read straight off the ledger. Each ``ingest_events``
 # row is one entry; its ``inventory_events`` give copies in / out and the balance
@@ -160,11 +160,52 @@ def card_holdings(scryfall_id: str) -> Holdings:
 
 HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase", "revert"]
 
+# THE kinds of History entry, in display order, with their one name and one help line —
+# the filter options, the row sub-labels and the detail ⓘ all read these (the web takes
+# them from GET /api/history). Each entry has exactly one kind (`_describe`), so the
+# kinds never overlap; every label names where the record came from.
+KIND_META: tuple[tuple[HistoryKind, str, str], ...] = (
+    ("deck", "Precon decks",
+     "A product registered from its decklist that is a playable deck: a Commander or other precon, a Jumpstart pack, "
+     "a Secret Lair that is a real deck — bought, or identified in your cards by Find products."),
+    ("pool", "Card pools",
+     "A product with a known card list that isn't a playable deck: land packs, scene boxes, Starter Collections, "
+     "small Secret Lair drops."),
+    ("purchase", "Store orders",
+     "An order read from your store order history (Mana Pool, TCGplayer, Card Kingdom), with what you paid. "
+     "Orders not in your collection yet wait under Needs review."),
+    ("checklist", "Checklists",
+     "Counts filled in a checklist: a set sheet, the Bulk modify counts grid, or an older precon / Jumpstart sheet "
+     "with no product recorded."),
+    ("singles", "Card entries",
+     "Cards you listed one by one — added or removed: search, pasted lists, scans, a deck list's cards, "
+     "file or Moxfield imports, census adjustments."),
+    ("move", "Built & broken down",
+     "Cards pledged to a built deck or released from one. What you own does not change."),
+    ("revert", "Reverts",
+     "An import you took back out with Revert this import: the copies it added were removed "
+     "(and any it removed put back). The original entry stays, marked reverted."),
+    ("unknown", "Origin unknown",
+     "Copies reconstructed when the ledger began, with no product or sheet they can be traced to."),
+)
+
 _SINGLES_TITLES = {
     "adhoc": "Added by hand", "intake": "Scan session", "import-block": "Imported list",
     "collection-import": "Collection import", "collection-export": "Collection export",
 }
-_WEB_TITLES = {"search": "Added from search", "paste": "Pasted list", "deck": "Added a deck's cards"}
+_WEB_TITLES = {"search": "Added from search", "paste": "Pasted list", "deck": "Cards from a deck list"}
+
+
+
+def _direction_title(method: str, label: str, copies_in: int, copies_out: int) -> str | None:
+    """A card entry's title from where it came from AND which way its copies moved:
+    a census adjustment says so; a by-hand entry (CLI or web search) that only took
+    copies out reads as a removal. None keeps the source title (mixed or other paths)."""
+    from .ingest import CENSUS_LABEL_PREFIX, WEB_LABEL_PREFIX
+    if label.startswith(CENSUS_LABEL_PREFIX):
+        return "Census removal" if copies_out and not copies_in else "Census addition" if copies_in and not copies_out else "Census adjustment"
+    by_hand = method == "adhoc" and (not label.startswith(WEB_LABEL_PREFIX) or label.startswith(f"{WEB_LABEL_PREFIX}search"))
+    return "Removed by hand" if by_hand and copies_out and not copies_in else None
 _UNKNOWN_DETAIL = {
     "backfill:precon": "Reconstructed from precon decklists — which product is not known",
     "backfill:unattributed": "Residual of the reconstruction — source not known",
@@ -195,6 +236,7 @@ class HistoryEntry:
     revertible: bool = False         # its kind can be reverted (ingest.not_revertible_reason) and it hasn't been
     reverted_by: int | None = None   # the revert event that undid it (V35)
     reverts: int | None = None       # revert entries: the event they undid
+    _label: str = field(default="", repr=False)   # the raw ingest label (titles read it; never sent to the web)
 
 
 @dataclass
@@ -233,7 +275,7 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
     iid, at, method, label, path, status, rows_added, rows_updated, mode, reverts = e
     label = label or ""
     base = os.path.basename(path) if path and "/" in path else None
-    h = HistoryEntry(ingest_id=iid, at=at, method=method, kind="singles", title="", lines=(rows_added or 0) + (rows_updated or 0))
+    h = HistoryEntry(ingest_id=iid, at=at, method=method, kind="singles", title="", lines=(rows_added or 0) + (rows_updated or 0), _label=label)
     if status == "backfill":
         h.dated = "reconstructed"
     if method == "revert":
@@ -252,7 +294,7 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
         h.kind, h.title, h.detail = "purchase", src.label, None
         return h
     if src.kind == "unknown":
-        h.kind, h.title = "unknown", "Provenance unknown"
+        h.kind, h.title = "unknown", "Origin unknown"
         h.detail = _UNKNOWN_DETAIL.get(label, label or None)
         return h
     if src.key.startswith("product:"):
@@ -275,7 +317,7 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
         elif kind == "jumpstart" and code:
             h.title, h.set_code = f"Jumpstart packs · {_set_label(code, set_names)}", code.lower()
         elif kind == "precon":
-            h.title = "Precon checklist"
+            h.title = "Product checklist"
         else:
             h.title = "Checklist"
         h.detail = base or path or (label or None)
@@ -418,6 +460,8 @@ def _fill(h: HistoryEntry, rows, held: dict[tuple[int, str, str], int], prices: 
             h.printings += 1
             h.value_usd += n * (_unit_usd(prices.get(sid), fin) or 0.0)
     h.value_usd = round(h.value_usd, 2)
+    if h.kind == "singles":
+        h.title = _direction_title(h.method, h._label, h.copies_in, h.copies_out) or h.title
 
 
 def _as_of(prices: dict[str, dict]) -> str | None:
@@ -456,6 +500,7 @@ def _link_reverts(conn, entries: list[HistoryEntry]) -> None:
     by = {r[0]: r[1] for r in conn.execute(
         "SELECT reverts_ingest_id, ingest_id FROM ingest_events WHERE reverts_ingest_id IS NOT NULL")}
     titles: dict[int, str] = {}
+    listed = {h.ingest_id: h for h in entries}
     want = [h.reverts for h in entries if h.reverts is not None]
     if want:
         ctx = _context(conn)
@@ -463,7 +508,15 @@ def _link_reverts(conn, entries: list[HistoryEntry]) -> None:
             f"SELECT ingest_id, at, method, label, source_path, status, rows_added, rows_updated, mode, "
             f"reverts_ingest_id FROM ingest_events WHERE ingest_id IN ({','.join('?' * len(want))})", want,
         ):
-            o = _describe(e, *ctx)
+            o = listed.get(e[0])
+            if o is None:   # not in this list: describe it, and title it by its own ledger rows
+                o = _describe(e, *ctx)
+                cin, cout = conn.execute(
+                    "SELECT COALESCE(SUM(CASE WHEN delta > 0 THEN delta END), 0), "
+                    "COALESCE(SUM(CASE WHEN delta < 0 THEN -delta END), 0) FROM inventory_events WHERE ingest_id = ?",
+                    (o.ingest_id,)).fetchone()
+                if o.kind == "singles":
+                    o.title = _direction_title(o.method, o._label, cin, cout) or o.title
             titles[o.ingest_id] = o.title + (f" · {o.detail}" if o.detail else "")
     for h in entries:
         h.reverted_by = by.get(h.ingest_id)
