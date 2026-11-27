@@ -210,8 +210,9 @@ test('“Missing means” is a Settings preference, not a rail filter, and it st
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/gaps/);
   // The choice changes what Missing means: the rail's explanation now says "no printing".
+  // (Closing Settings returns focus to the gear, whose own tooltip may still be open — find ours by its text.)
   await page.getByRole('button', { name: 'What does missing mean?' }).focus();
-  await expect(page.getByRole('tooltip')).toContainText('cards you own in no printing');
+  await expect(page.getByRole('tooltip').filter({ hasText: 'cards you own in no printing' })).toBeVisible();
   await page.reload();
   await expect((await means()).getByRole('radio', { name: 'The card' })).toBeChecked();
 });
