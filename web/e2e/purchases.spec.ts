@@ -83,7 +83,6 @@ test('one Purchase history: undecided orders pinned under Needs review, totals i
   const tabs = page.getByRole('navigation', { name: 'Collection views' });
   await expect(tabs.getByRole('link')).toHaveText(['Cards', 'Purchase history']);
   await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toBeVisible();
-  await expect(page.getByText(/Paid \$30\.00 across 2 orders · collection worth \$45\.50 now · \+\$15\.50/)).toBeVisible();
   const list = page.getByRole('navigation', { name: 'Purchase history' });
   await expect(list.getByRole('heading', { level: 2 }).first()).toContainText('Needs review');
   const review = list.getByRole('region', { name: /Needs review/ });

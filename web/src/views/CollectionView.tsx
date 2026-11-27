@@ -11,6 +11,7 @@ import { AddCardMark, CartCheckMark, CountCardsMark } from '../components/icons/
 import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
+import { summaryLine } from '../core/checklist';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { useChecklist } from './collection/useChecklist';
 import { SceneDetail, SceneMeta } from './collection/SceneHead';
@@ -255,6 +256,7 @@ export function CollectionView() {
     const familyNames = new Map(q.data.families.map((f) => [f.code, f.name]));
     body = (
       <div className="flex h-full min-h-0 flex-col">
+        <p role="status" aria-live="polite" className="mx-sheet py-2 text-sm tabular text-ink-muted">{summaryLine(checklist.summary, checklist.saved)}</p>
         <ChecklistNotes checklist={checklist} />
         <ChecklistTable sections={view.sections} byId={view.byId} familyNames={familyNames} checklist={checklist} />
       </div>

@@ -8,7 +8,7 @@ test('Explore opens on rankings, as a grid; Rankings is the first tab', async ({
   const tabs = page.getByRole('navigation', { name: 'Explore views' }).getByRole('link');
   await expect(tabs).toHaveText(['Rankings', 'Cards', 'Earmarked', 'Surfer']);
   await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Switch to list view' })).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Inspect Krenko, Mob Boss' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Find');
@@ -26,7 +26,6 @@ test('the rankings list joins what you own, with type, color and cost columns; n
   await expect(krenko.getByRole('cell', { name: 'Goblin Warrior' })).toBeVisible();
   await expect(krenko.getByRole('img', { name: 'Color identity: red' })).toBeVisible();
   await expect(krenko.getByRole('img', { name: 'Mana cost: 2, red, red' })).toBeVisible();
-  await expect(page.getByText(/ranked · you own \d+ · \d+ unused · read /)).toBeVisible();
   const actions = page.getByRole('toolbar', { name: 'Ranking actions' });
   await expect(actions.getByRole('button', { name: 'Refresh' })).toBeVisible();
   await expect(actions.getByRole('link', { name: /Open results in EDHREC/ })).toHaveAttribute('href', 'https://edhrec.com/commanders/mono-red/week');

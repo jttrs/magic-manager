@@ -1,7 +1,8 @@
 // Checklist mode (Collection): an in-browser draft of owned counts per printing
 // + finish, its running diff, and the save payload. Framework-free; the engine
 // (sets.apply_counts) does the write.
-import type { CollectionCardOut, CountIn } from './api';
+import type { ChecklistOut, CollectionCardOut, CountIn } from './api';
+import { fmtInt, fmtUsd } from './format';
 
 export type Finish = 'nonfoil' | 'foil';
 const FINISHES: readonly Finish[] = ['nonfoil', 'foil'];
@@ -203,4 +204,20 @@ export function nextCell(
     if (rows[r].finishes.includes(finish)) return { row: r, finish };
   }
   return null;
+}
+
+const copies = (plus: number, minus: number) =>
+  `${[plus ? `+${fmtInt(plus)}` : '', minus ? `−${fmtInt(minus)}` : ''].filter(Boolean).join(' ') || '±0'} ${plus + minus === 1 ? 'copy' : 'copies'}`;
+
+/** The sheet summary while bulk-modifying counts: the running diff (or the last save) in plain numbers. */
+export function summaryLine(s: DraftSummary, saved: ChecklistOut | null): string {
+  if (saved && !s.cells) {
+    const n = saved.rows.length;
+    return n
+      ? `Saved ${fmtInt(n)} ${n === 1 ? 'count' : 'counts'} · ${copies(saved.copies_added, saved.copies_removed)}`
+      : 'Nothing to save — every count matched';
+  }
+  if (!s.cells) return 'Modifying counts · type how many you have; Enter moves down, ←/→ switch finish, Esc undoes a cell';
+  const val = `${s.value >= 0 ? '+' : '−'}${fmtUsd(Math.abs(s.value))}`;
+  return `Modifying counts · ${fmtInt(s.cells)} ${s.cells === 1 ? 'change' : 'changes'} · ${copies(s.added, s.removed)} · ${val} at market${s.unpriced ? ` (${fmtInt(s.unpriced)} unpriced)` : ''}`;
 }

@@ -86,11 +86,10 @@ test('phone masthead, crowded: restore point + a running job + the gear still fi
   await navFitsBeside(page, 390);
 });
 
-test('sheet header is compact: no printed title, the meta line sits in the header strip', async ({ page }) => {
+test('sheet header is compact: no printed title, no stats text in the header strip', async ({ page }) => {
   await page.goto('/jobs');
   await expect(page.getByRole('heading', { level: 1, name: 'Jobs' })).toHaveClass(/sr-only/);
-  await expect(page.getByText('Long-running work runs in the background; progress streams live.')).toBeVisible();
-  await expect(page.locator('[data-subnav]').getByText('Long-running work runs in the background; progress streams live.')).toBeVisible();
+  await expect(page.getByText('Long-running work runs in the background; progress streams live.')).toHaveCount(0);
 });
 
 test('card inspector: Value + Cheapest rows, recheck without naming a vendor, one View on row', async ({ page }) => {
