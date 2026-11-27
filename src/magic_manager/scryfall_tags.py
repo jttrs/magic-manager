@@ -329,11 +329,7 @@ def card_summaries(oracle_ids: Iterable[str], *,
         h = _hierarchy(c)
         roots = function_roots(conn=c, _h=h)
         raw = _taggings(c, list(oracle_ids))
-    excluded: set[str] = set()
-    for slug in cfg["preview_exclude"]:
-        tid = h.by_slug.get(slug)
-        if tid:
-            excluded |= h.subtree(tid)
+    excluded = _excluded(h)
     functional = frozenset().union(*(r.tag_ids for r in roots)) if roots else frozenset()
     limit = max(0, cfg["preview_limit"] if limit is None else limit)
     out: dict[str, CardTagSummary] = {}
@@ -348,6 +344,60 @@ def card_summaries(oracle_ids: Iterable[str], *,
         if funcs or tags:
             out[oid] = CardTagSummary(funcs, tags)
     return out
+
+
+def _excluded(h: _Hierarchy) -> set[str]:
+    """The structural / meta subtrees (``preview_exclude``) — never offered as a filter tag."""
+    out: set[str] = set()
+    for slug in config.function_tags()["preview_exclude"]:
+        tid = h.by_slug.get(slug)
+        if tid:
+            out |= h.subtree(tid)
+    return out
+
+
+def oracle_tag_search(q: str, limit: int = 20, *, conn: sqlite3.Connection | None = None) -> list[dict]:
+    """Oracle (card-function) tags whose label or slug contains ``q`` →
+    ``[{id, label, slug, cards}]``, exact matches first then most cards; the
+    structural / meta subtrees are left out. ``cards`` = distinct cards carrying
+    the tag or anything below it (what filtering by it would match)."""
+    needle = (q or "").strip().lower()
+    if not needle:
+        return []
+    with db.transaction(conn) as c:
+        h = _hierarchy(c)
+        hidden = _excluded(h)
+        hits = [(tid, slug, label) for tid, (slug, label, _kids) in h.by_id.items()
+                if tid not in hidden and (needle in label.lower() or needle in slug.lower())]
+        counts = {tid: len(_oracles_under(c, h, tid)) for tid, _s, _l in hits}
+    hits.sort(key=lambda t: (needle not in (t[2].lower(), t[1].lower()), -counts[t[0]], t[2]))
+    return [{"id": tid, "label": label, "slug": slug, "cards": counts[tid]} for tid, slug, label in hits[:max(0, limit)]]
+
+
+def _oracles_under(c: sqlite3.Connection, h: _Hierarchy, tag_id: str) -> set[str]:
+    ids = sorted(h.subtree(tag_id))
+    out: set[str] = set()
+    for i in range(0, len(ids), _CHUNK):
+        chunk = ids[i:i + _CHUNK]
+        out.update(r[0] for r in c.execute(
+            f"SELECT DISTINCT oracle_id FROM card_oracle_tags WHERE tag_id IN ({','.join('?' * len(chunk))})", chunk))
+    return out
+
+
+def oracles_with_tags(slugs: Iterable[str], *, conn: sqlite3.Connection | None = None) -> tuple[list[dict], set[str]]:
+    """The cards carrying ANY of these oracle tags (by slug; each rolls up its
+    subtree, like a function root) → ``(resolved tags [{id, label, slug}], oracle_ids)``.
+    Unknown slugs are skipped (absent from the resolved list)."""
+    with db.transaction(conn) as c:
+        h = _hierarchy(c)
+        tags, ids = [], set()
+        for slug in dict.fromkeys(s.strip().lower() for s in slugs if s and s.strip()):
+            tid = h.by_slug.get(slug)
+            if not tid:
+                continue
+            tags.append({"id": tid, "label": h.by_id[tid][1], "slug": slug})
+            ids |= _oracles_under(c, h, tid)
+    return tags, ids
 
 
 def status(*, kind: str = "oracle", conn: sqlite3.Connection | None = None) -> dict:

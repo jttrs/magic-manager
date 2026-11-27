@@ -268,3 +268,19 @@ test('a search with characters the browser re-encodes does not keep rewriting th
   expect(await page.evaluate(() => history.length)).toBe(before);
   await expect(page.getByRole('searchbox', { name: 'Card name' })).toHaveValue("Ahoy Mateys'");
 });
+
+test('card tags: search any Tagger tag, pick it, and only cards carrying it stay', async ({ page }) => {
+  const keep = cards.slice(0, 3).map((c) => c.oracle_id!);
+  await page.route((u) => u.pathname === '/api/oracle-tags', (r) =>
+    r.fulfill({ json: { synced: true, tags: [{ id: 't1', slug: 'burn', label: 'burn', cards: 3 }] } }));
+  await page.route((u) => u.pathname === '/api/oracle-tags/cards', (r) =>
+    r.fulfill({ json: { tags: [{ id: 't1', slug: 'burn', label: 'burn' }], oracle_ids: keep } }));
+  await page.goto(COLLECTION_ALL_URL);
+  await page.getByRole('searchbox', { name: 'Card tags' }).fill('bur');
+  await page.getByRole('button', { name: /^burn/ }).click();
+  await expect(page).toHaveURL(/ot=burn/);
+  const expected = cards.filter((c) => keep.includes(c.oracle_id!)).length;
+  await expect(page.getByRole('article')).toHaveCount(expected);
+  await page.getByRole('button', { name: 'Remove card tag burn' }).click();
+  await expect(page).not.toHaveURL(/ot=/);
+});

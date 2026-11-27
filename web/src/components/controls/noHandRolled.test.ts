@@ -21,7 +21,7 @@ const isControl = (f: string) => f.startsWith('components/controls/') || f.start
 const isIcon = (f: string) => f.startsWith('components/icons/');
 
 /** Charts and data marks: SVG geometry computed from data, not icons. */
-const CHART_FILES = new Set(['views/market/PriceHistory.tsx']);
+const CHART_FILES = new Set(['views/market/PriceHistory.tsx', 'components/controls/DateRange.tsx']);
 
 /** Runtime-computed geometry (virtual rows, progress widths, chart positions). */
 const STYLE_FILES = new Set([

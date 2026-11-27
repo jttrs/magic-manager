@@ -16,6 +16,8 @@ export type CollectionFilters = {
   fn?: readonly string[];
   /** Only printings of cards you earmarked. */
   em?: boolean;
+  /** Cards carrying the chosen oracle tags (resolved server-side to oracle ids); absent = no tag filter. */
+  otIds?: ReadonlySet<string>;
 };
 
 /** `fn` key for printings no function root covers. */
@@ -88,7 +90,7 @@ function ownedCopies(c: CollectionCardOut, exclude: readonly string[]): number {
   return ownedIn(c, allowedFinishes(c, new Set(exclude)));
 }
 
-type CollectionFacet = 'em' | 'q' | 'fn' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
+type CollectionFacet = 'em' | 'q' | 'fn' | 'ot' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
 
 const FACET_GROUP: Record<'rarity' | 'treatment' | 'chase', TraitGroup> = { rarity: 'Rarity', treatment: 'Treatment', chase: 'Chase' };
 
@@ -119,6 +121,7 @@ function collectionFacets(f: CollectionFilters): Facets<CollectionCardOut, Colle
     em: (c) => !f.em || !!c.earmarked,
     q: (c) => !q || c.name.toLowerCase().includes(q),
     fn: (c) => !fn.size || fnKeys(c).some((k) => fn.has(k)),
+    ot: (c) => !f.otIds || (c.oracle_id != null && f.otIds.has(c.oracle_id)),
     rarity, treatment, chase,
     finish: (c) => allowedFinishes(c, excluded).length > 0,
     show: (c) => {

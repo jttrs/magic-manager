@@ -4476,6 +4476,48 @@ export type OpenTabsOut = {
 };
 
 /**
+ * OracleTagCardsOut
+ */
+export type OracleTagCardsOut = {
+    /**
+     * Tags
+     *
+     * The requested tags that exist locally (unknown slugs are left out).
+     */
+    tags: Array<OracleTagRefOut>;
+    /**
+     * Oracle Ids
+     *
+     * Cards carrying ANY of them, sorted.
+     */
+    oracle_ids: Array<string>;
+};
+
+/**
+ * OracleTagHitOut
+ */
+export type OracleTagHitOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Cards
+     *
+     * Cards carrying the tag or anything below it.
+     */
+    cards: number;
+};
+
+/**
  * OracleTagOut
  *
  * A Scryfall Tagger oracle tag (``id`` is the stable UUID).
@@ -4493,6 +4535,40 @@ export type OracleTagOut = {
      * Label
      */
     label: string;
+};
+
+/**
+ * OracleTagRefOut
+ */
+export type OracleTagRefOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Slug
+     */
+    slug: string;
+};
+
+/**
+ * OracleTagSearchOut
+ */
+export type OracleTagSearchOut = {
+    /**
+     * Synced
+     *
+     * False until the Scryfall tag cache is loaded (job `scryfall.sync_tags`).
+     */
+    synced: boolean;
+    /**
+     * Tags
+     */
+    tags: Array<OracleTagHitOut>;
 };
 
 /**
@@ -10246,6 +10322,72 @@ export type ArtTagsResponses = {
 };
 
 export type ArtTagsResponse = ArtTagsResponses[keyof ArtTagsResponses];
+
+export type OracleTagsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/oracle-tags';
+};
+
+export type OracleTagsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OracleTagsError = OracleTagsErrors[keyof OracleTagsErrors];
+
+export type OracleTagsResponses = {
+    /**
+     * Successful Response
+     */
+    200: OracleTagSearchOut;
+};
+
+export type OracleTagsResponse = OracleTagsResponses[keyof OracleTagsResponses];
+
+export type OracleTagCardsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Tags
+         *
+         * Comma-separated tag slugs (any of).
+         */
+        tags?: string;
+    };
+    url: '/api/oracle-tags/cards';
+};
+
+export type OracleTagCardsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OracleTagCardsError = OracleTagCardsErrors[keyof OracleTagCardsErrors];
+
+export type OracleTagCardsResponses = {
+    /**
+     * Successful Response
+     */
+    200: OracleTagCardsOut;
+};
+
+export type OracleTagCardsResponse = OracleTagCardsResponses[keyof OracleTagCardsResponses];
 
 export type ArtSwapsData = {
     body: ArtSwapsIn;

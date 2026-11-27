@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
-import { collectionQuery, familiesQuery } from '../app/queries';
+import { oracleTagCardsQuery, collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
@@ -11,6 +11,7 @@ import { AddCardMark, CartCheckMark, CountCardsMark } from '../components/icons/
 import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
+import { OracleTagField } from './collection/OracleTagField';
 import { summaryLine } from '../core/checklist';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { useChecklist } from './collection/useChecklist';
@@ -40,7 +41,7 @@ const route = getRouteApi('/collection');
  *  Show filter except the set families you chose. How cards are arranged (sort,
  *  view type) and what "missing" means (a Settings preference) are not filters,
  *  so they stay put. */
-const RESET: Partial<CollectionSearch> = { show: ['owned'], exclude: [], q: '', fn: [], em: false };
+const RESET: Partial<CollectionSearch> = { show: ['owned'], exclude: [], q: '', fn: [], ot: [], em: false };
 
 export function CollectionView() {
   const search = route.useSearch();
@@ -62,7 +63,7 @@ export function CollectionView() {
   const rules = useMemo(() => activeRules(decodeSort(search.sort, COLLECTION_SORT), hasScenes), [search.sort, hasScenes]);
   const missingMeans = useMissingMeans();
   const gaps = missingMeans === 'card';
-  const filtered = search.exclude.length > 0 || !(search.show.length === 1 && search.show[0] === 'owned') || Boolean(search.q) || search.fn.length > 0 || search.em;
+  const filtered = search.exclude.length > 0 || !(search.show.length === 1 && search.show[0] === 'owned') || Boolean(search.q) || search.fn.length > 0 || search.ot.length > 0 || search.em;
   const settings = useMemo(() => ({
     id: 'collection',
     title: 'Collection',
@@ -83,11 +84,14 @@ export function CollectionView() {
   }), [missingMeans]);
   useSettingsSection(settings);
 
-  const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps }, rules) : null), [q.data, search, gaps, rules]);
+  // Oracle tags resolve to card ids on the server (each tag rolls up its child tags).
+  const tagCards = useQuery({ ...oracleTagCardsQuery(search.ot), enabled: search.ot.length > 0 });
+  const otIds = useMemo(() => (search.ot.length && tagCards.data ? new Set(tagCards.data.oracle_ids) : undefined), [search.ot, tagCards.data]);
+  const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps, otIds }, rules) : null), [q.data, search, gaps, otIds, rules]);
   // Every control's counts: under all the OTHER filters (core/facets), never its own.
   const facetData = useMemo(
-    () => (q.data ? collectionCounts(q.data.cards, { ...search, gaps }) : null),
-    [q.data, search, gaps],
+    () => (q.data ? collectionCounts(q.data.cards, { ...search, gaps, otIds }) : null),
+    [q.data, search, gaps, otIds],
   );
   const counts = facetData?.traits ?? null;
   const included = (g: TraitGroup) => traitsIn(g).map((t) => t.key).filter((k) => !search.exclude.includes(k));
@@ -213,6 +217,7 @@ export function CollectionView() {
             options={fnOptions}
           />
         )}
+        <OracleTagField value={search.ot} onChange={(ot) => set({ ot })} />
         <Segmented
           label="Earmarked"
           showLabel
@@ -334,7 +339,7 @@ function typesSummary(exclude: readonly string[]): string {
 type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSection[]; byId: Map<string, CollectionCardOut>; stats: ReturnType<typeof collectionStats> };
 
 /** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
-function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boolean }, rules: SortRule<CollectionSortKey>[]): Built {
+function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boolean; otIds?: ReadonlySet<string> }, rules: SortRule<CollectionSortKey>[]): Built {
   const shown = filterCollection(data.cards, search);
   const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
   const ranks = sceneRanks(data.scenes ?? []);

@@ -27,7 +27,7 @@ from pydantic import BaseModel, ValidationError
 from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
 from .. import auth, collection_sync, db, ingest as ingest_mod, layout as layout_mod, purchases as purchases_engine, userfiles
 from ..api import purchases as purchases_api
-from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
+from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, oracle_tags as oracle_tags_api, jumpstart as jumpstart_api, surf as surf_api
 from ..api.ids import DeckFileName, SetCode
 from .runtime import TERMINAL, JobManager, JobsBusy, JobsTooMany
 from . import account_routes, analytics_routes, auth_routes, flag_routes, prefs_routes, scraper_routes, security, sitecheck, telemetry
@@ -702,6 +702,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def art_tags(q: Annotated[str, Query(max_length=100)] = "",
                  limit: Annotated[int, Query(ge=1, le=50)] = 20):
         return art_api.tags(q, limit)
+
+    @app.get("/api/oracle-tags", response_model=oracle_tags_api.OracleTagSearchOut, tags=["oracle-tags"])
+    def oracle_tags(q: Annotated[str, Query(max_length=100)] = "",
+                    limit: Annotated[int, Query(ge=1, le=50)] = 20):
+        return oracle_tags_api.search(q, limit)
+
+    @app.get("/api/oracle-tags/cards", response_model=oracle_tags_api.OracleTagCardsOut, tags=["oracle-tags"])
+    def oracle_tag_cards(tags: Annotated[str, Query(max_length=500, description="Comma-separated tag slugs (any of).")] = ""):
+        return oracle_tags_api.cards([t for t in tags.split(",") if t.strip()])
 
     @app.post("/api/art/swaps", response_model=art_api.ArtSwapsOut, tags=["art"])
     def art_swaps(body: art_api.ArtSwapsIn):
