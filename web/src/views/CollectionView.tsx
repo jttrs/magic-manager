@@ -117,6 +117,8 @@ export function CollectionView() {
         { value: NO_FUNCTION, label: 'No tagged function', count: fnCounts.get(NO_FUNCTION) ?? 0 },
       ]
     : null;
+  // Shown as "Loading…" until the payload says whether any card has a function.
+  const fnLoading = fams.isPending || (scope.length > 0 && q.isPending);
 
   const cartCheck = useFeature('cart_check');
   const checklist = useChecklist();
@@ -137,17 +139,16 @@ export function CollectionView() {
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
       <SideSection title="Show" quiet>
-        {fams.isPending ? (
-          <p role="status" className="text-sm text-on-chrome-muted">Loading your set families…</p>
-        ) : fams.isError ? (
+        {fams.isError ? (
           <p role="alert" className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
         ) : (
           <MultiSelect
             label="Set families"
             noun="families"
+            loading={fams.isPending}
             value={search.families}
-            onChange={(families) => set({ families: families.length === fams.data.length ? [] : families })}
-            options={fams.data.map((f) => ({ value: f.code, label: f.name }))}
+            onChange={(families) => set({ families: families.length === (fams.data?.length ?? 0) ? [] : families })}
+            options={(fams.data ?? []).map((f) => ({ value: f.code, label: f.name }))}
           />
         )}
         <SegmentedToggles
@@ -210,9 +211,10 @@ export function CollectionView() {
           onChange={(mode) => set({ exclude: setGroupIncluded(search.exclude, 'Chase', mode === 'exclude' ? ['chase:no'] : ['chase:yes', 'chase:no']) })}
           options={[{ value: 'include', label: 'Include' }, { value: 'exclude', label: 'Exclude' }]}
         />
-        {fnOptions && (
+        {(fnOptions || fnLoading) && (
           <MultiSelect
             label="Function"
+            loading={!fnOptions}
             labelExtra={
               <InfoTip label="Where do functions come from?">
                 What the card does, from Scryfall’s community tags (Tagger). A card can have several functions. <b>No tagged function</b> means none of these.
@@ -222,7 +224,7 @@ export function CollectionView() {
             searchable={false}
             value={search.fn}
             onChange={(fn) => set({ fn })}
-            options={fnOptions}
+            options={fnOptions ?? []}
           />
         )}
         <OracleTagField value={search.ot} onChange={(ot) => set({ ot })} />
