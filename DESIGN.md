@@ -178,6 +178,7 @@ Depth is mostly tonal and ruled, not shadowed. The app chrome, raised chrome con
 - **Preview float** (`0_10px_24px_var(--theme-scrim)`): card-art hover preview above rows/tiles.
 - **Popover float** (`shadow-popover` = `0 12px 28px -12px scrim`): every menu, popover, tooltip and select list (`menuPanelClass`).
 - **Dialog float** (`shadow-dialog` = `0 24px 60px -24px scrim`): every dialog sheet (`dialogContentClass`).
+- **Dialog scrim** (`dialogOverlayClass`): a flat `scrim` dim — **never a `backdrop-filter` blur**. A backdrop blur makes Chrome recompute the page behind on every repaint (scrolling the dialog, a pulsing job dot) and flickered the dialog (owner-tested, Nov 2026).
 
 ### Named Rules
 **The Ruled-First Rule.** Prefer borders, hairlines, and tonal stock changes before shadows. Shadows are for floating previews, popovers, and the sheet resting on chrome.
