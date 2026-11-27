@@ -63,3 +63,15 @@ describe('collection facet counts', () => {
     expect(filterCollection(cards, { ...ALL, exclude }).map((c) => c.scryfall_id)).toEqual(old.map((c) => c.scryfall_id));
   });
 });
+
+describe('card-tag filter', () => {
+  const tagged = cards.map((c, i) => ({ ...c, oracle_id: `o${i}` }));
+  it('keeps only cards whose oracle id carries a chosen tag; absent = no tag filter; empty = nothing', () => {
+    expect(filterCollection(tagged, { ...ALL, otIds: new Set(['o0', 'o2']) }).map((c) => c.scryfall_id)).toEqual(['a', 'c']);
+    expect(filterCollection(tagged, { ...ALL })).toHaveLength(4);
+    expect(filterCollection(tagged, { ...ALL, otIds: new Set() })).toHaveLength(0);
+  });
+  it('other controls count under the tag filter', () => {
+    expect(collectionCounts(tagged, { ...ALL, otIds: new Set(['o0', 'o1']) }).fn.get('ramp')).toBe(2);
+  });
+});

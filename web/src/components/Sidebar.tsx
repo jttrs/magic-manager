@@ -137,13 +137,3 @@ export function SelectField<T extends string>({ label, value, options, onChange,
     </RailField>
   );
 }
-
-/** A calendar day (YYYY-MM-DD), cleared with the field's own clear control. */
-export function DateField({ label, value, onChange, name, min, max }: { label: string; value: string | undefined; onChange: (v: string | undefined) => void; name: string; min?: string; max?: string }) {
-  const id = useId();
-  return (
-    <RailField label={label} htmlFor={id}>
-      <TextInput id={id} name={name} type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value || undefined)} />
-    </RailField>
-  );
-}

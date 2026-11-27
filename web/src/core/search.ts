@@ -86,6 +86,8 @@ export const collectionSearch = z.object({
   q: z.string().catch('').default(''),
   /** Scryfall Tagger function roots to keep (OR); empty = all. */
   fn: list(z.string()).catch([]).default([]),
+  /** Scryfall Tagger oracle-tag slugs to keep (any of; each rolls up its child tags). */
+  ot: list(z.string()).catch([]).default([]),
   /** Only cards you earmarked (any printing). */
   em: z.boolean().catch(false).default(false),
   sort: z.string().catch(COLLECTION_SORT_DEFAULT).default(COLLECTION_SORT_DEFAULT),

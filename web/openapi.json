@@ -3669,6 +3669,108 @@
         }
       }
     },
+    "/api/oracle-tags": {
+      "get": {
+        "tags": [
+          "oracle-tags"
+        ],
+        "summary": "Oracle Tags",
+        "operationId": "oracle_tags",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OracleTagSearchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/oracle-tags/cards": {
+      "get": {
+        "tags": [
+          "oracle-tags"
+        ],
+        "summary": "Oracle Tag Cards",
+        "operationId": "oracle_tag_cards",
+        "parameters": [
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "Comma-separated tag slugs (any of).",
+              "default": "",
+              "title": "Tags"
+            },
+            "description": "Comma-separated tag slugs (any of)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OracleTagCardsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/art/swaps": {
       "post": {
         "tags": [
@@ -12444,6 +12546,61 @@
         ],
         "title": "OpenTabsOut"
       },
+      "OracleTagCardsOut": {
+        "properties": {
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/OracleTagRefOut"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "The requested tags that exist locally (unknown slugs are left out)."
+          },
+          "oracle_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Oracle Ids",
+            "description": "Cards carrying ANY of them, sorted."
+          }
+        },
+        "type": "object",
+        "required": [
+          "tags",
+          "oracle_ids"
+        ],
+        "title": "OracleTagCardsOut"
+      },
+      "OracleTagHitOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "cards": {
+            "type": "integer",
+            "title": "Cards",
+            "description": "Cards carrying the tag or anything below it."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "slug",
+          "cards"
+        ],
+        "title": "OracleTagHitOut"
+      },
       "OracleTagOut": {
         "properties": {
           "id": {
@@ -12467,6 +12624,51 @@
         ],
         "title": "OracleTagOut",
         "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
+      },
+      "OracleTagRefOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "slug"
+        ],
+        "title": "OracleTagRefOut"
+      },
+      "OracleTagSearchOut": {
+        "properties": {
+          "synced": {
+            "type": "boolean",
+            "title": "Synced",
+            "description": "False until the Scryfall tag cache is loaded (job `scryfall.sync_tags`)."
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/OracleTagHitOut"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "synced",
+          "tags"
+        ],
+        "title": "OracleTagSearchOut"
       },
       "OrderIn": {
         "properties": {

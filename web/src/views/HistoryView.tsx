@@ -17,7 +17,8 @@ import { IconAction } from '../components/IconAction';
 import { iconActionClass } from '../components/iconActionClass';
 import { IconTooltip } from '../components/IconTooltip';
 import { ViewToggle } from '../components/ArrangeControls';
-import { DateField, SideSection, TextField } from '../components/Sidebar';
+import { SideSection, TextField } from '../components/Sidebar';
+import { DateRange } from '../components/controls/DateRange';
 import { EditDeckMark, FindProductsMark, ReadOrdersMark } from '../components/icons/marks';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
@@ -99,8 +100,7 @@ export function HistoryView() {
           onChange={(v) => set({ kinds: v as HistorySearch['kinds'] })}
           options={kinds}
         />
-        <DateField name="from" label="From" value={search.from} min={first} max={search.to ?? last} onChange={(from) => set({ from })} />
-        <DateField name="to" label="To" value={search.to} min={search.from ?? first} max={last} onChange={(to) => set({ to })} />
+        {first && last && <DateRange label="When" from={search.from} to={search.to} onChange={(from, to) => set({ from, to })} days={allDays} min={first} max={last} />}
         {filtered && (
           <Button emphasis="link" onClick={() => set({ q: '', kinds: [], from: undefined, to: undefined })} className="self-start text-sm">
             Clear filters

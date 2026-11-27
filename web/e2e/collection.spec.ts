@@ -210,8 +210,9 @@ test('“Missing means” is a Settings preference, not a rail filter, and it st
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/gaps/);
   // The choice changes what Missing means: the rail's explanation now says "no printing".
+  // (Closing Settings returns focus to the gear, whose own tooltip may still be open — find ours by its text.)
   await page.getByRole('button', { name: 'What does missing mean?' }).focus();
-  await expect(page.getByRole('tooltip')).toContainText('cards you own in no printing');
+  await expect(page.getByRole('tooltip').filter({ hasText: 'cards you own in no printing' })).toBeVisible();
   await page.reload();
   await expect((await means()).getByRole('radio', { name: 'The card' })).toBeChecked();
 });
@@ -267,4 +268,27 @@ test('a search with characters the browser re-encodes does not keep rewriting th
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => history.length)).toBe(before);
   await expect(page.getByRole('searchbox', { name: 'Card name' })).toHaveValue("Ahoy Mateys'");
+});
+
+test('card tags: search any Tagger tag, pick it, and only cards carrying it stay', async ({ page }) => {
+  const keep = cards.slice(0, 3).map((c) => c.oracle_id!);
+  await page.route((u) => u.pathname === '/api/oracle-tags', (r) =>
+    r.fulfill({ json: { synced: true, tags: [{ id: 't1', slug: 'burn', label: 'burn', cards: 3 }] } }));
+  await page.route((u) => u.pathname === '/api/oracle-tags/cards', (r) =>
+    r.fulfill({ json: { tags: [{ id: 't1', slug: 'burn', label: 'burn' }], oracle_ids: keep } }));
+  await page.goto(COLLECTION_ALL_URL);
+  await page.getByRole('searchbox', { name: 'Card tags' }).fill('bur');
+  await page.getByRole('button', { name: /^burn/ }).click();
+  await expect(page).toHaveURL(/ot=burn/);
+  const expected = cards.filter((c) => keep.includes(c.oracle_id!)).length;
+  await expect(page.getByRole('article')).toHaveCount(expected);
+  await page.getByRole('button', { name: 'Remove card tag burn' }).click();
+  await expect(page).not.toHaveURL(/ot=/);
+});
+
+test('card tags never fall back to the whole collection: an unknown tag is named and left out', async ({ page }) => {
+  await page.route((u) => u.pathname === '/api/oracle-tags/cards', (r) => r.fulfill({ json: { tags: [], oracle_ids: [] } }));
+  await page.goto(`${COLLECTION_ALL_URL}${COLLECTION_ALL_URL.includes('?') ? '&' : '?'}ot=gone-tag`);
+  await expect(page.getByRole('status').filter({ hasText: 'No card tag “gone-tag”' })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(cards.length); // the unknown tag is skipped, not an empty list
 });

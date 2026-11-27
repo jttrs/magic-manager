@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions, type QueryClient } from '@tanstack/reac
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingPageRequest } from '../core/rankings';
-import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks, listFlags, listPrefs, listRuleFamilies, getFamilyRules, listVariantKinds } from '../core/api';
+import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, oracleTagCards, oracleTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks, listFlags, listPrefs, listRuleFamilies, getFamilyRules, listVariantKinds } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -414,6 +414,22 @@ export const cardCombosQuery = (name: string | undefined, enabled = true) =>
     queryKey: ['combos', 'card', name],
     queryFn: async ({ signal }) => unwrap(await cardCombos({ query: { name: name! }, signal })),
     enabled: Boolean(name) && enabled,
+    staleTime: 10 * 60_000,
+  });
+
+export const oracleTagsQuery = (q: string) =>
+  queryOptions({
+    queryKey: ['oracle-tags', q],
+    queryFn: async ({ signal }) => unwrap(await oracleTags({ query: { q, limit: 8 }, signal })),
+    staleTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+/** The cards carrying any of these oracle tags (each rolls up its child tags). */
+export const oracleTagCardsQuery = (slugs: readonly string[]) =>
+  queryOptions({
+    queryKey: ['oracle-tags', 'cards', [...slugs].sort().join(',')],
+    queryFn: async ({ signal }) => unwrap(await oracleTagCards({ query: { tags: slugs.join(',') }, signal })),
     staleTime: 10 * 60_000,
   });
 

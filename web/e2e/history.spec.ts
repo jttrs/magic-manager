@@ -142,3 +142,23 @@ test.describe('revert this import', () => {
     await expect(page.getByRole('button', { name: 'Revert this import' })).toHaveCount(0);
   });
 });
+
+test('one "When" control: presets set the range in the URL, Custom reveals typed days, All time clears it', async ({ page }) => {
+  await mockHistory(page);
+  await page.goto('/collection/history');
+  const when = page.getByRole('group', { name: 'When' });
+  await expect(when).toContainText('All time');
+  const rows = page.getByRole('navigation', { name: 'History' }).getByRole('button');
+  const before = await rows.count();
+  await when.getByRole('button', { name: 'Last 90 days' }).click();
+  await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}/);
+  await expect.poll(() => rows.count()).toBeLessThanOrEqual(before);
+  await expect(when).toContainText(/^.*Since /);
+  await expect(when.getByRole('slider', { name: 'From' })).toBeVisible();
+  await when.getByRole('button', { name: 'Custom' }).click();
+  await expect(when.getByLabel('To')).toHaveCount(2); // the slider thumb and the typed day
+  await when.getByRole('button', { name: 'All time' }).click();
+  await expect(page).not.toHaveURL(/from=/);
+  await expect(when.getByRole('button', { name: 'All time' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(when.getByRole('button', { name: 'Custom' })).toHaveAttribute('aria-pressed', 'false');
+});
