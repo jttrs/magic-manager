@@ -146,12 +146,6 @@ export function artists(c: SurfCardOut): string {
   return names.join(' & ');
 }
 
-/** Sheet summary: `1,470 match · 12 seen`, or for your cards `214 of your cards · 12 seen`. */
-export function feedSummary(source: SurfSource, total: number | null | undefined, seen: number, fmt: (n: number) => string): string {
-  const pool = total == null ? null : source === 'owned' ? `up to ${fmt(total)} of your cards` : `${fmt(total)} match`;
-  return [pool, `${fmt(seen)} seen`].filter(Boolean).join(' · ');
-}
-
 export const scryfallSearchUrl = (query: string) => `https://scryfall.com/search?q=${encodeURIComponent(query)}&unique=prints`;
 
 export const tcgplayerSearch = (name: string) =>

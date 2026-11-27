@@ -33,7 +33,7 @@ import { exportLines, type GuideCard } from '../../core/guideCard';
 import { RANKING_UNREAD_NOTE } from '../../core/jobs';
 import {
   edhrecUrl, emptyRankingNote, failureText, fetchedAgo, FIRST_PAGE, fmtMetric, metricLabel, nextPage, OWN_LABEL, partialRankingNote, rankedCard, rankedTypes,
-  rankingPage, rankingRequest, rankingSummary, roleFor, SCOPE_LABEL, tagApplies, TIMEFRAME_LABEL, timeframeApplies,
+  rankingPage, rankingRequest, roleFor, SCOPE_LABEL, tagApplies, TIMEFRAME_LABEL, timeframeApplies,
 } from '../../core/rankings';
 import { RANK_OWN, RANK_SCOPES, RANK_TIMEFRAMES, type CompareSearch, type RankOwn, type RankScope, type RankTimeframe } from '../../core/search';
 
@@ -197,7 +197,6 @@ export function RankingsExplore({ search, set, subnav }: Props) {
       <GuideSheet
         arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />}
         title={r?.title ?? SCOPE_LABEL[search.rank]}
-        summary={r ? `${rankingSummary(r)}${ago ? ` · read ${ago}` : ''}` : undefined}
         actionsLabel="Ranking actions"
         marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}
         actions={

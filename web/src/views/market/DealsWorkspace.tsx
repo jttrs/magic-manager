@@ -9,13 +9,12 @@ import { Pressable } from '../../components/controls/Pressable';
 import { Chevron } from '../../components/icons/Chevron';
 import { EmptyNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
-import { BASIS_LABEL, deltaLabel, effectiveType, filterListings, filterSortProducts, gapOf, listingStatus, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct, type TabListing } from '../../core/deals';
-import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
+import { deltaLabel, effectiveType, filterListings, filterSortProducts, gapOf, listingStatus, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct, type TabListing } from '../../core/deals';
+import { fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
 import { CardValueCells, CardValueHeads } from './CardValueCells';
 import { DealInspector, ListingInspector } from './DealInspector';
 import { dealFilters, dismiss, useWatch, type CostState, type DealCosts, type DealsData } from './useDealsData';
-import { SheetSummary } from '../../components/SheetSummary';
 
 type Props = {
   data: DealsData;
@@ -55,10 +54,6 @@ export function DealsWorkspace({ data, costs, search, set, header, emptyNote }: 
         </EmptyNote>
       ) : (
         <>
-          <SheetSummary>
-            {fmtInt(shown.length)} of {fmtCount(data.products.length, 'watched product')}
-            {pinnedTotal > 0 && ` · ${fmtInt(pinned.length + listings.length)} from your open tabs`} · compared to {BASIS_LABEL[search.basis]}
-          </SheetSummary>
           <ProductTable shown={shown} pinned={pinned} listings={listings} costs={costs} basis={search.basis} item={search.item} onPick={(item) => set({ item })} onDismiss={onDismiss} />
         </>
       )}

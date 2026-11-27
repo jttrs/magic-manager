@@ -21,7 +21,8 @@ export function CopyButton({ label, getText, emphasis = 'quiet', tone = 'chrome'
   );
 }
 
-export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string };
+/** A destination a list can be copied for; `format` says what the paste is ("Mass Entry"), `note` what it can't carry. */
+export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string; format?: string };
 
 /** A compact row of icon-only store marks; each copies that store's list and
  *  shows a check when done. The result appears in a small bubble anchored on

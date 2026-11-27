@@ -87,38 +87,38 @@ function CompanionSlot() {
 /** Sidebar (starts below the nav) + main region, under ONE full-width strip.
  *
  *  The strip sits under the top nav, above BOTH the rail and the sheet, in chrome
- *  stock (`surface-chrome` remaps the paper-styled header controls to it). It is a
- *  row of delimited sections, each hidden (with its divider) while empty:
- *  [tabs] | [stats, one truncating line] | [arrange] | [actions, rightmost].
+ *  stock (`surface-chrome` remaps the paper-styled header controls to it): the
+ *  section's mode tabs on the left, then — right-aligned — the icon groups, each
+ *  set off by a divider on its left and hidden (with it) while empty:
+ *  [tabs] … | [arrange] | [buy] | [actions, rightmost]. No stats text.
  *  - `subnav` fills the tabs section — the section's modes (Collection: Cards ·
- *    Purchase history; Explore: Rankings · Cards · Surfer). Pass
- *    `<SectionTabs label=… tabs=… />`; it takes the strip's look and renders
- *    nothing for fewer than two tabs.
- *  - stats / arrange / actions are slots: the first `GuideSheet` under the layout
- *    portals its summary, `arrange` and `actions` into them (`SheetHeaderSlots`).
+ *    History; Explore: Rankings · Cards · Surfer). Pass `<SectionTabs label=…
+ *    tabs=… />`; it takes the strip's look and renders nothing for fewer than two tabs.
+ *  - arrange / buy / actions are slots: the first `GuideSheet` under the layout
+ *    portals its `arrange`, `buy` and `actions` into them (`SheetHeaderSlots`).
  *  With nothing in any section the strip collapses to nothing. Below `lg` it wraps:
- *  tabs on one row, then stats + arrange + actions; it stays visible while the
- *  rail is collapsed. */
+ *  tabs on one row, then the icon groups; it stays visible while the rail is collapsed. */
 export function ViewLayout({ sidebar, children, label, summary, startOpen = false, subnav }: { sidebar: ReactNode; children: ReactNode; label: string; summary?: string; startOpen?: boolean; subnav?: ReactNode }) {
   const wide = useMediaQuery('(min-width: 64rem)');
   const [open, setOpen] = useState(startOpen);
   const shown = wide || open;
-  const [stats, setStats] = useState<HTMLElement | null>(null);
   const [arrange, setArrange] = useState<HTMLElement | null>(null);
+  const [buy, setBuy] = useState<HTMLElement | null>(null);
   const [actions, setActions] = useState<HTMLElement | null>(null);
   const owner = useRef<symbol | null>(null);
-  const slots = useMemo(() => ({ stats, arrange, actions, owner }), [stats, arrange, actions]);
-  // A divider after a section only while a later section has content.
-  const rule = 'lg:has-[~*:not(:empty)]:border-r lg:border-chrome-line';
+  const slots = useMemo(() => ({ arrange, buy, actions, owner }), [arrange, buy, actions]);
+  const group = 'flex min-h-10 items-center border-l border-chrome-line px-sheet empty:hidden';
   return (
     <div className="flex min-h-0 min-w-0 flex-col lg:h-[calc(100dvh-var(--size-topbar))]">
-      <div data-subnav="" className="surface-chrome flex shrink-0 flex-wrap items-stretch border-b border-chrome-line bg-chrome text-on-chrome not-has-[>:not(:empty)]:hidden">
-        <div className={`w-full max-w-full empty:hidden lg:w-auto ${rule}`}>
+      <div data-subnav="" className="surface-chrome flex shrink-0 flex-wrap items-stretch border-b border-chrome-line bg-chrome text-on-chrome not-has-[>:first-child:not(:empty)]:not-has-[[data-slot]:not(:empty)]:hidden">
+        <div className="w-full max-w-full empty:hidden lg:w-auto">
           <SubnavSlot.Provider value>{subnav}</SubnavSlot.Provider>
         </div>
-        <div ref={setStats} className={`min-w-0 flex-1 basis-40 truncate px-sheet py-2.5 text-sm tabular text-ink-muted empty:hidden [&>*+*]:ml-3 ${rule}`} />
-        <div ref={setArrange} className={`flex min-h-10 items-center px-sheet empty:hidden ${rule}`} />
-        <div ref={setActions} className="ml-auto flex min-h-10 items-center px-sheet empty:hidden" />
+        <div className="ml-auto flex items-stretch">
+          <div ref={setArrange} data-slot="" className={group} />
+          <div ref={setBuy} data-slot="" className={group} />
+          <div ref={setActions} data-slot="" className={group} />
+        </div>
       </div>
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <aside aria-label={label} className="relative min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-3">

@@ -495,3 +495,15 @@ export function ResizeMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A shopping cart with a check (audit a store cart against your collection). */
+export function CartCheckMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3 4.5h2.2l2.2 10.2h9.8l2-7.2H6.4" />
+      <circle cx="9.5" cy="18.8" r="1.3" />
+      <circle cx="16" cy="18.8" r="1.3" />
+      <path d="M10.4 10.6l1.8 1.8 3.4-3.6" />
+    </svg>
+  );
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut } from './api';
-import { confirmMoved, dropSaved, rebaseStale, summaryLine, cellValue, countFinishes, familyLabel, nextCell, parseCount, readDraft, setCell, summarize, toChanges, type Draft } from './checklist';
+import { confirmMoved, dropSaved, rebaseStale, cellValue, countFinishes, familyLabel, nextCell, parseCount, readDraft, setCell, summarize, toChanges, type Draft } from './checklist';
 
 const card = (over: Partial<CollectionCardOut> = {}): CollectionCardOut => ({
   scryfall_id: 'a', oracle_id: null, name: 'Alpha', family: 'tst', set_code: 'tst', collector_number: '1', rarity: 'rare',
@@ -100,12 +100,6 @@ describe('checklist draft', () => {
     expect(Object.keys(after).sort()).toEqual(['a|foil', 'b|nonfoil']);
     expect(after['a|foil']).toMatchObject({ qty: 3, was: 2 });
     expect(dropSaved(sent, sent)).toEqual({});
-  });
-
-  it('writes the running diff line', () => {
-    const d = setCell(setCell({}, card(), 'nonfoil', 5, 'T'), card({ scryfall_id: 'b', owned: { foil: 1 } }), 'foil', 0, 'T');
-    expect(summaryLine(summarize(d), null)).toBe('Modifying counts · 2 changes · +2 −1 copies · −$1.00 at market');
-    expect(summaryLine(summarize({}), { ingest_id: 1, added: 0, updated: 1, zeroed: 0, copies_added: 2, copies_removed: 0, rows: [{ scryfall_id: 'a', finish: 'nonfoil', old_qty: 3, new_qty: 5 }] })).toBe('Saved 1 count · +2 copies');
   });
 
   it('labels families for the ingest event', () => {

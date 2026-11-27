@@ -108,7 +108,6 @@ export function AdminView() {
     <ViewLayout label="People filters" summary={q.data ? fmtCount(shown.length, 'person', 'people') : undefined} sidebar={sidebar}>
       <GuideSheet
         title="Admin"
-        summary={q.data ? `${fmtCount(users.length, 'person', 'people')} can sign in · ${counts.admins} admin${counts.admins === 1 ? '' : 's'}` : undefined}
         actionsLabel="Admin actions"
         actions={isAdmin ? <InviteDialog trigger={<IconAction Icon={InviteMark} label="Invite someone" />} /> : undefined}
       >

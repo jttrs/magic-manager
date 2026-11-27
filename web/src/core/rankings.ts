@@ -96,12 +96,6 @@ export function edhrecUrl(r: Pick<RankingOut, 'scope' | 'timeframe' | 'filter'>)
   return `https://edhrec.com/${path}`;
 }
 
-/** Sheet summary: what the list shows and how much of it you own. */
-export function rankingSummary(r: Pick<RankingOut, 'total' | 'pool' | 'owned' | 'unused'>): string {
-  const lead = r.total === r.pool ? `${r.pool} ranked` : `${r.total} of ${r.pool} match`;
-  return `${lead} · you own ${r.owned} · ${r.unused} unused`;
-}
-
 /** When EDHREC stopped answering partway through the list, the pool holds only
  *  the pages read: say so plainly, with the way out (Refresh). */
 export function partialRankingNote(r: Pick<RankingOut, 'base' | 'pool_complete' | 'pool_partial_reason'>): string | null {

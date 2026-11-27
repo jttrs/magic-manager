@@ -188,7 +188,6 @@ export function ExploreView() {
     <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a} subnav={tabs}>
       <GuideSheet
         title={search.a ? `Explore ${search.a}${search.b ? ` and ${search.b}` : ''}` : 'Explore'}
-        summary={role ? summaryLine(role, prof, cmd.data) : undefined}
         arrange={
           <>
             <ViewToggle value={search.view} onChange={(view) => set({ view })} />
@@ -243,13 +242,6 @@ function withTotals(sections: GuideSection[]): GuideSection[] {
     for (let j = i + 1; j < sections.length && sections[j].level !== 1; j++) n += sections[j].items.length;
     return { ...s, meta: fmtInt(n) };
   });
-}
-
-function summaryLine(role: Role, prof?: CardExploreOut, cmd?: CompareOut): string | undefined {
-  if (!prof) return undefined;
-  if (role === 'commander' && cmd) return `${fmtInt(cmd.cards.length)} recommended cards · EDHREC inclusion · cheapest price across printings`;
-  if (role === 'card') return `EDHREC decks running ${prof.b ? 'each card' : 'it'} · lift = how much more often a card shares its decks than chance`;
-  return undefined;
 }
 
 function buildCommander(data: CompareOut, search: CompareSearch, rules: ReturnType<typeof decodeSort>) {

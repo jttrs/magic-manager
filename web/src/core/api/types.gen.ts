@@ -4023,7 +4023,7 @@ export type JumpstartBuyIn = {
     /**
      * Target
      */
-    target: 'manapool' | 'tcgplayer' | 'cardkingdom';
+    target: 'manapool' | 'tcgplayer' | 'cardkingdom' | 'moxfield' | 'plain';
 };
 
 /**

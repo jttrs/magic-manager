@@ -45,7 +45,6 @@ export function AnalyticsView() {
     <ViewLayout label="Analytics controls" sidebar={sidebar} summary={`Last ${days} days`}>
       <GuideSheet
         title="Analytics"
-        summary={s ? `${s.since} → ${s.until} · errors first, then how the app is used` : 'Errors and usage, from this server’s own event store'}
       >
         {flagOn && !allowed ? (
           <EmptyNote title="Analytics is for admins here">It shows everyone’s activity on this server, so only an admin can open it.</EmptyNote>

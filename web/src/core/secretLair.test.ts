@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProductCostOut, SldDropOut } from './api';
 import { marketSearch } from './search';
 import { fmtDay } from './format';
-import { basisColumn, dropBase, filterSortDrops, oldestPricesAt, splitBonus, sldGap, sldKey, sldRows, watchKey, type SldFilters } from './secretLair';
+import { basisColumn, dropBase, filterSortDrops, splitBonus, sldGap, sldKey, sldRows, watchKey, type SldFilters } from './secretLair';
 
 const cost = (p: Partial<ProductCostOut>): ProductCostOut => ({ kind: 'sld', set_code: 'sld', name: 'x', ...p }) as ProductCostOut;
 
@@ -64,11 +64,6 @@ describe('secret lair columns + freshness', () => {
     expect(basisColumn('exact')).toBe('exact');
     expect(basisColumn('floor')).toBe('floor');
     expect(basisColumn('market')).toBeNull();
-  });
-
-  it('finds the oldest prices_at', () => {
-    expect(oldestPricesAt([cost({ prices_at: '2026-11-14T08:00:00' }), undefined, cost({ prices_at: '2026-11-12T08:00:00' }), cost({})])).toBe('2026-11-12T08:00:00');
-    expect(oldestPricesAt([cost({})])).toBeNull();
   });
 
   it('splits bonus lines apart from the guaranteed cards', () => {
