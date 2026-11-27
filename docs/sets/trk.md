@@ -7,22 +7,22 @@
 **Anchor code:** `trk`
 **Family root type:** `expansion` (Universes Beyond, `parent_set_code: null`)
 **Family released:** 2026-11-13 (all 7 codes)
-**Last audit:** 2026-11-02 via `/characterize-set trk` (non-interactive batch run).
+**Last audit:** 2026-11-27 (post-release refresh of the 2026-11-02 pre-release audit; prices, products and boosters re-read).
 
 ---
 
-> **Pre-release snapshot.** Audited 11 days before release: almost every print
-> is unpriced, MTGJSON has the set file but **no booster data and no decklists**
-> yet, and there are CN gaps (trk 327–331; trc 131, 134–136, 143–144, 149–150,
-> 154–160, 164, 167, 169–171, 174, 176, 178–179, 578, 581) still to be filled by
-> Scryfall. Re-run `/characterize-set trk` after release (prices, decks,
-> boosters, any `ptrk` promo set) and refresh §3/§5/§9.
+> **Released 2026-11-13; refreshed 2026-11-27.** Prices, decklists and booster
+> data are in. The trk 327–331 gap is filled by five foil-only borderless crew
+> cards (see §2). The trc CN gaps (131, 134–136, 143–144, 149–150, 154–160, 164,
+> 167, 169–171, 174, 176, 178–179, 578, 581) are still empty on Scryfall, so they
+> look like unused numbers rather than missing cards. Still no `ptrk` promo set.
+> Headliners and the Klingon-language foils are still unpriced.
 
 ## 1. Family map
 
 | Code | `set_type` | Cards | Released | Notes |
 |---|---|---:|---|---|
-| `trk` | expansion | 581 | 2026-11-13 | parent — base 1–326, boosterfun 332–579, headliners 1701–1706 |
+| `trk` | expansion | 586 | 2026-11-13 | parent — base 1–326, crew foils 327–331, boosterfun 332–579, headliners 1701–1706 |
 | `trc` | commander | 556 | 2026-11-13 | Star Trek Commander (4 face commanders trc 1–4) |
 | `sds` | masterpiece | 30 | 2026-11-13 | **Stardates** — borderless reprint masterpiece sheet (all mythic) |
 | `ttrk` | token | 27 | 2026-11-13 | set tokens |
@@ -48,6 +48,7 @@ Survey (`survey_treatment_signature.py TRK`, 1,274 prints). Umbrella token
 | base | 306 | `trk` 1–306 | `regular` | rarity/base sub-selectors |
 | full-art basics | 10 | `trk` 307–316 (2 arts × 5) | `fa` | kept (commons; not in rare/mythic selectors) |
 | regular basics | 10 | `trk` 317–326 | `regular` | base |
+| borderless crew foils | 5 | `trk` 327 Nyota Uhura, 328 Scotty, 329 Dr. Leonard "Bones" McCoy, 330 Kirk, Commanding Officer, 331 Spock, Always Your Friend — borderless inverted full-art legendary, foil-only, ~$5–8 each | `b` | **kept (default) — pending owner review**. Not on any booster sheet and no MTGJSON `sourceProducts`; the product they ship in is unconfirmed |
 | borderless (inverted) | 31 | `trk` 332–362 (Odo, Quark, Jadzia Dax, Quark's Bar, Starfleet Academy, …) | `b` | **kept (default) — pending owner review** |
 | showcase, black border | 73 | `trk` 363–391, 402–435 | `shw` | **kept (default) — pending owner review** (see note) |
 | showcase full-art shocklands | 10 | `trk` 392–401 | `shw` (fa suppressed) | **kept (default) — pending owner review** |
@@ -122,11 +123,16 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | poster/bundle starship showcase (trk 550–557) | 8 | unsure — bundle-exclusive distinct art (LTR's `poster` tier was excluded, but those were sealed poster inserts) |
 | black-bordered showcase (trk 363–435) | 73 | keep — the set's main boosterfun frame (not the D&D rulebook frame) |
 | borderless (trk 332–362, trc 1–4/180–191/202–211) | 57 | keep — ordinary borderless treatment |
-| `sds` Stardates masterpieces | 30 | keep — masterpiece sheet (Sheoldred, the Apocalypse $199.99 is the only priced high card so far) |
+| `sds` Stardates masterpieces | 30 | keep — masterpiece sheet, ≈ $208 nonfoil / $366 foil (Sheoldred, the Apocalypse 11 ~$96, Talon Gates of Madara 28 ~$39, Minamo 27 ~$35) |
+| borderless crew foils (trk 327–331) | 5 | owner's call — distinct art from their booster versions, product unconfirmed, ~$31 for all five |
 
-**Scarcity check:** `set_status.py trk` prints no ⚠ concentration note (family
-not configured → missing $ not computed; nearly all prints unpriced pre-release).
-Re-run after release.
+**Prices (2026-11-27):** trk ≈ $914 nonfoil / $3,693 foil across 567 priced
+prints; base 1–306 R+M ≈ $323 nonfoil (Deep Space 9 263 ~$41, Borg Cube 227 ~$27,
+Death Is Irrelevant 102 ~$19, Jadzia Dax 204 ~$18). The foil chase is the surgefoil
+showcase: Captain Jean-Luc Picard 497 ~$191, Deep Space 9 556 ~$146 (poster),
+Mr. Spock 535 ~$133. Black-bordered showcase 363–435 ≈ $276 nonfoil, borderless
+332–362 ≈ $125, poster starships 550–557 ≈ $413 foil. Headliners and Klingon foils
+have no price yet.
 
 **Missing-set baseline (2026-11-02):** 0 owned; `mm query missing-set trk`
 refuses (no `[dupe_foil]` entry). Simulated with `trk = ["surgefoil"]`:
@@ -158,9 +164,12 @@ No `ptrk` set yet. Star Trek promos found elsewhere (all `universesbeyond`):
 - **Surgefoil shares CN with nonfoil in `trc`** (9–130, 418–577 are
   `[nonfoil, foil]` + `surgefoil`): the foil finish IS the surgefoil; there is no
   plain-foil version.
-- **trc nonfoil-only band 132–177** (25 commons/uncommons, e.g. Head of
-  Security, Kolinahr Priest) and 192–201 (rares/mythics incl. pmei twins) —
-  product unknown pre-release; check MTGJSON decks after release.
+- **trc nonfoil-only band 132–177** (e.g. Head of Security, Kolinahr Priest)
+  and 192–201 (rares/mythics incl. pmei twins): MTGJSON now has the eight trc
+  decklists (four decks plus Collector's Editions), so their source deck can be
+  read with `mm mtgjson`.
+- **One unsynced variation:** Scryfall lists Gwyndala, the Progeny `450†` as a
+  `variation` print, which `mm set sync` never fetches.
 - Same-name pairs across bands: e.g. Captain Jean-Luc Picard trk 7 / 363 /
   497 / 1701D; The Unicomplex 304 / 337; Vulcan 305 / 579 (surge).
 - No arena/digital-only leaks (`mm query show 'set:trk+related missing' | grep -ci arena` → 0).
@@ -180,10 +189,11 @@ No `ptrk` set yet. Star Trek promos found elsewhere (all `universesbeyond`):
 
 | Product | Archetype (→ [`../product-types.md`](../product-types.md)) | Family-specific detail |
 |---|---|---|
-| Star Trek Commander decks | Commander deck | 4 face commanders: The Borg Queen, Commander Spock, Jean-Luc Picard, Luminary, Worf, Defiant Commander (trc 1–4; surgefoil twins 5–8). MTGJSON has no decklists yet (`mm mtgjson decks --set trc` empty). |
+| Star Trek Commander decks | Commander deck | Federation Fleet, Klingon Fury, Landing Party, We Are the Borg, each also as a Collector's Edition (excluded from `precon-list` by default). Face commanders trc 1–4; surgefoil twins 5–8. |
+| Welcome Decks ×5 | Welcome deck | White, Blue, Black, Red, Green |
+| Scene Boxes ×2 | Scene Box | Divergent Timelines and Enterprise-Q: a deck, 6 art-only scene cards, an easel and 3 Play Boosters each. MTGJSON has no decklist for either deck yet |
+| Play / Collector boosters, Draft Night, Prerelease Pack | booster product | — |
 | Bundle | Bundle | bundle-tagged promos trk 550–558 (8 poster starships + Bones McCoy 558) |
 | Stardates | masterpiece sheet | `sds` 1–30, borderless reprints |
 
-**Booster types (for `sealed-value` EV):** none yet — `sealed_value.py trk
---list-boosters` → "no booster data in MTGJSON" (pre-release). Re-run after
-release.
+**Booster types (for `sealed-value` EV)** — `scripts/sealed_value.py trk --list-boosters` (2026-11-27): `collector` EV ~$26.89 (99% coverage), `play` ~$5.72, `prerelease` ~$2.89.

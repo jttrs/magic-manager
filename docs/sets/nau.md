@@ -7,84 +7,85 @@
 **Anchor code:** `nau`
 **Family root type:** `expansion`
 **Family released:** 2027-02-05 (**UNRELEASED** at audit time — pre-release placeholder in Scryfall/MTGJSON)
-**Last audit:** 2026-11-01 via `/characterize-set nau` (batch, non-interactive).
+**Last audit:** 2026-11-27 (preview refresh of the 2026-11-01 placeholder audit).
 
-> ⚠️ **Placeholder family — re-characterize after spoilers/release.** At audit time
-> Scryfall lists `nau` with `card_count: 0` (no cards spoiled) and one token-set
-> card; MTGJSON's `NAU` has `totalSetSize: 0`, 1 token, no decks, no booster data.
-> Every section below is "n/a — no cards yet" except the token. Re-run
-> `/characterize-set nau` once the set is spoiled (expect a full premier-expansion
-> family: commander/promo/art-series/masterpiece siblings may appear then).
+> ⚠️ **Preview-season snapshot.** Scryfall now lists **24 `nau` printings** (9 card
+> names), **4 `nac`** and **1 `tnau`**: early previews, not the set. Previewed cards
+> carry no `frame_effects` or `promo_types` yet, so every print computes `regular`
+> and the alternate-art CNs can't be classified. MTGJSON has the product list but
+> no decks and no booster data. Re-run `/characterize-set nau` after release
+> (expected 2027-02-05), then add the family's `[dupe_foil]` entry.
 
 ---
 
 ## 1. Family map
 
-| Code | `set_type` | Cards | Released | Notes |
+| Code | `set_type` | Cards (Scryfall, 2026-11-27) | Released | Notes |
 |---|---|---:|---|---|
-| `nau` | expansion | 0 | 2027-02-05 | parent — `parent_set_code: null`, no cards spoiled yet |
-| `tnau` | token | 1 | 2027-02-05 | child (`parent_set_code: nau`) — only card is `God Pack Celebration Card` |
+| `nau` | expansion | 24 | 2027-02-05 | parent (`parent_set_code: null`); 9 previewed names, CNs 5–410 |
+| `nac` | commander | 4 | 2027-02-05 | **new since the first audit**: Nauctis Commander — face commanders "The Ignoble Serpent" 6 and "Zekes, Acid Rock Fan" 8 (foil-only), Crucible of Worlds 345 / 365 |
+| `tnau` | token | 1 | 2027-02-05 | only card is `God Pack Celebration Card` 10 |
 
-**Separately-rooted bonus sheets:** none found. Scryfall `/sets` scan of
-2026-10-01 → 2027-03-01 shows only `pw27`/`pf27` (yearly promo sets, not
-family-specific) and the unrelated `trk`/`fra`/`mbc` families (plus `tfdc`, an `fdc` token child) in the window.
-
-No `--only` needed.
+No `pnau` promo set or art series yet. `set:nau+related` covers all three codes.
 
 ---
 
 ## 2. Treatments
 
-Survey (`survey_treatment_signature.py NAU`, 2026-11-01): 1 print total in the family.
+Survey (`survey_treatment_signature.py NAU`, 2026-11-27): every print computes `regular`
+(26 nonfoil rows, 29 foil rows), because preview data has no frame or promo tags yet.
 
 | Class | Count | CN band | Computed treatment | Preferred-filter disposition |
 |---|---:|---|---|---|
-| base | 1 | `tnau` 10 | `regular` (foil-only) | the lone print is a **token** (`is_token=1`) → hard-excluded from missing-set by `missing.missing_printings` |
+| base previews | 9 | `nau` 5, 70, 121, 220, 234, 238, 260 + repeats | `regular` | rarity sub-selectors |
+| alternate CNs of the same names | 15 | `nau` 281–410 (e.g. Salinae, the Ocean Mother 70 / 321 / 353 / 369 / 409) | `regular` for now | **unclassified**: mostly distinct art (Salinae 321, 353, 409 differ from 70), but 353 and 369 share art, so a fancy-foil or treatment-twin sheet is likely |
+| commander face cards | 2 | `nac` 6, 8 (foil-only, legendary) | `regular` | mythic-regular |
+| Crucible of Worlds | 2 | `nac` 345, 365 | `regular` | mythic-regular; two CNs, likely two frames |
+| celebration token | 1 | `tnau` 10 | `regular` (foil-only) | token: hard-excluded from missing-set |
 
-- No showcase, borderless, extended-art, etched, or fancy-foil classes exist yet.
-- `promo_types`: none present. No dupe-foil / stamped signals to evaluate.
-- **Full-art convention:** n/a (no cards).
+**Prices so far:** Abyssal Lotus 316 ~$100, Ring of Unity 317 ~$70 / 238 ~$47,
+Calmwater Mentor 281 ~$60, Tecton, Malignant Ruin 121 ~$28, Goramou 311 ~$25.
+Most prints are unpriced.
 
 ---
 
 ## 3. Chase variants
 
-n/a — no cards spoiled.
+Too early to tell. The 281–410 alternate CNs are where chase tiers will show once
+Scryfall tags their frames.
 
 ---
 
 ## 4. Scenes / posters / panoramas
 
-n/a — no cards spoiled.
+None detected yet.
 
 ---
 
 ## 5. Unobtainable rules
 
-None. No alt-treatment tiers exist yet, so no keep/exclude decisions are
-pending. `set_status.py nau` reports 0 owned, missing "not configured" — no
-concentration note (nothing priced).
+None. No treatment tiers can be told apart yet, so no keep/exclude decisions are
+pending. The family still has no `[dupe_foil]` entry, so `mm query missing-set nau`
+refuses.
 
 ---
 
 ## 6. PRM destinations
 
-n/a — no promo sibling (`pnau`) exists yet. Expect a `pnau` prerelease/promo
-set and WPN prints under `pw27` once spoiled; record CN patterns then.
+No `pnau` set yet. Expect a prerelease / promo set and WPN prints under `pw27`.
 
 ---
 
 ## 7. Edge cases & gotchas
 
 - **`God Pack Celebration Card`** (`tnau` 10): `layout: token`, `type_line: Card`,
-  no oracle text, foil-only, black border, 2015 frame, no price. A pack-insert
-  "celebration" card (presumably marks a god-pack opening), filed as a token —
-  tracked if owned, never in missing-set buy lists. Scryfall's `tnau` CN 10 with
-  no CNs 1–9 suggests the real token list hasn't been published yet.
-- `mm query missing-set nau` currently fails with the "requires per-family
-  dupe-foil config" `SelectorParseError` (family unconfigured); `mm query show
-  'set:nau+related missing'` lists only the token.
-- Arena leak check: n/a (no cards).
+  foil-only, no price. A pack-insert celebration card, filed as a token, so it's
+  tracked if owned but never in missing-set lists. Still no `tnau` 1–9.
+- **Commander face cards are quoted names** (`"The Ignoble Serpent"`,
+  `"Zekes, Acid Rock Fan"` include the quote marks on Scryfall); search by the
+  quoted name.
+- **Same art on two CNs:** Salinae 353 and 369 share `illustration_id`. Once tags
+  arrive, check whether one is a fancy-foil twin for `[dupe_foil]`.
 
 ---
 
@@ -98,11 +99,14 @@ set and WPN prints under `pw27` once spoiled; record CN patterns then.
 
 ## 9. Product types
 
-n/a yet — MTGJSON has no `sealedProduct`, no decks, and no booster data for
-`NAU` (`sealed_value.py nau --list-boosters` → "no booster data in MTGJSON").
-Fill in Play/Collector booster types, Bundle, and any Commander/Jumpstart
-products after release. Archetype definitions: [`../product-types.md`](../product-types.md).
+Archetype definitions: [`../product-types.md`](../product-types.md). MTGJSON lists the
+products but no decks or booster data yet (`sealed_value.py nau --list-boosters` →
+"no booster data in MTGJSON").
 
-| Booster type | Notes |
-|---|---|
-| — | none in MTGJSON as of 2026-11-01 |
+| Product | Archetype | Family-specific detail |
+|---|---|---|
+| Booster Pack / Booster Box | booster product | a single "Booster Pack" (no separate Play/Draft naming), plus a **Box Topper Pack** |
+| Collector Booster Pack / Box | booster product | — |
+| Bundle | Bundle | — |
+| Draft Night | limited aid | — |
+| Commander Decks ×4 | Commander deck | Blood in the Water, Merfolk Regiment, Seal the Deal, Terrors of the Abyss, each also as a **Premium Edition** (`nac`) |
