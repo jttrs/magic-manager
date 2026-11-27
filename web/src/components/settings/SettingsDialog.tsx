@@ -33,9 +33,7 @@ export function SettingsButton() {
             <Dialog.Description className="sr-only">Appearance, view preferences, privacy and more.</Dialog.Description>
             <Dialog.Close className="touch-hit grid size-9 cursor-pointer place-items-center rounded-sm text-ink-muted hover:bg-paper-sunk hover:text-ink" aria-label="Close"><CloseMark className="size-icon-md" /></Dialog.Close>
           </header>
-          {/* will-change-scroll: this body is see-through over the sheet's paper grain, so without
-              the hint Chrome may repaint the grain on every scroll step and flash what's behind. */}
-          <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto overscroll-contain will-change-scroll px-5 pb-6 pt-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto overscroll-contain px-5 pb-6 pt-4">
             {sections.map((s) => (
               <SettingsGroup key={s.id} title={s.title}>{s.content}</SettingsGroup>
             ))}
