@@ -9,8 +9,10 @@ const WIDTH: Record<DialogSize, string> = {
   lg: 'w-[min(var(--dialog-lg),calc(100vw-1rem))]',
 };
 
-/** The scrim behind a dialog. */
-export const dialogOverlayClass = 'fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]';
+/** The scrim behind a dialog: a flat dim, no backdrop blur — a backdrop-filter makes Chrome
+ *  recompute the page behind on every repaint (scrolling a dialog, a pulsing job dot), which
+ *  flickers the dialog. */
+export const dialogOverlayClass = 'fixed inset-0 z-40 bg-scrim';
 
 /** A dialog's paper sheet, centred. `layout` = how its body stacks (`stack`: a padded
  *  column that scrolls as a whole; `frame`: a flex column whose own parts scroll). */
