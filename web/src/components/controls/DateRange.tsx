@@ -1,5 +1,5 @@
 import { Slider } from 'radix-ui';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { addDays, daysBetween, DATE_PRESETS, histogram, isoDay, presetOf, presetRange, rangeLabel, type DatePreset } from '../../core/dateRange';
 import { Pressable } from './Pressable';
 import { RailField } from './RailField';
@@ -10,6 +10,11 @@ import { TextInput } from './TextField';
  *  data's span with a two-handle slider over it that snaps to days, and — under
  *  Custom — typed From / To days for precision and keyboard use. `from`/`to` are
  *  ISO days; undefined = open end. */
+const sameRange = (p: Exclude<DatePreset, 'custom'>, from: string | undefined, to: string | undefined, today: string) => {
+  const r = presetRange(p, today);
+  return r.from === from && r.to === to;
+};
+
 export function DateRange({ label, from, to, onChange, days, min, max, today = isoDay(Date.now()) }: {
   label: string;
   from?: string;
@@ -23,18 +28,28 @@ export function DateRange({ label, from, to, onChange, days, min, max, today = i
   today?: string;
 }) {
   const id = useId();
-  const preset = presetOf(from, to, today);
-  const [custom, setCustom] = useState(preset === 'custom');
+  // The preset you picked wins when two presets name the same start day (This year
+  // vs Last 90 days on Mar 31); otherwise the range decides which pill is on.
+  const [picked, setPicked] = useState<DatePreset | null>(null);
+  const derived = presetOf(from, to, today);
+  const preset: DatePreset = picked && picked !== 'custom' && sameRange(picked, from, to, today) ? picked : derived;
+  const [custom, setCustom] = useState(derived === 'custom');
+  // A range set from outside (Clear filters, back/forward) that is a preset turns Custom off.
+  useEffect(() => {
+    if (derived !== 'custom') setCustom(false);
+  }, [derived]);
   const span = Math.max(1, daysBetween(min, max));
   const bins = useMemo(() => histogram(days, min, max), [days, min, max]);
   const peak = Math.max(1, ...bins.map((b) => b.count));
-  const lo = from && from > min ? from : min;
-  const hi = to && to < max ? to : max;
+  // Thumbs stay on the track: a range reaching past the data clamps to its ends.
+  const hi = to && to < max ? (to > min ? to : min) : max;
+  const lo = from && from > min ? (from < hi ? from : hi) : min;
   const [drag, setDrag] = useState<[number, number] | null>(null);
   const value = drag ?? [daysBetween(min, lo), daysBetween(min, hi)];
   const shownFrom = drag ? addDays(min, drag[0]) : from;
   const shownTo = drag ? addDays(min, drag[1]) : to;
   const pick = (p: DatePreset) => {
+    setPicked(p);
     setCustom(p === 'custom');
     if (p !== 'custom') {
       const r = presetRange(p, today);
@@ -43,8 +58,11 @@ export function DateRange({ label, from, to, onChange, days, min, max, today = i
   };
   const commit = ([a, b]: number[]) => {
     setDrag(null);
-    onChange(a > 0 ? addDays(min, a) : undefined, b < span ? addDays(min, b) : undefined);
-    setCustom(true);
+    const nf = a > 0 ? addDays(min, a) : undefined;
+    const nt = b < span ? addDays(min, b) : undefined;
+    setPicked(null);
+    setCustom(presetOf(nf, nt, today) === 'custom');
+    onChange(nf, nt);
   };
   const W = 100, H = 24, gap = 0.4;
   const bw = W / Math.max(1, bins.length);

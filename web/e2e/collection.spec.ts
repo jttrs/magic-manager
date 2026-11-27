@@ -284,3 +284,10 @@ test('card tags: search any Tagger tag, pick it, and only cards carrying it stay
   await page.getByRole('button', { name: 'Remove card tag burn' }).click();
   await expect(page).not.toHaveURL(/ot=/);
 });
+
+test('card tags never fall back to the whole collection: an unknown tag is named and left out', async ({ page }) => {
+  await page.route((u) => u.pathname === '/api/oracle-tags/cards', (r) => r.fulfill({ json: { tags: [], oracle_ids: [] } }));
+  await page.goto(`${COLLECTION_ALL_URL}${COLLECTION_ALL_URL.includes('?') ? '&' : '?'}ot=gone-tag`);
+  await expect(page.getByRole('status').filter({ hasText: 'No card tag “gone-tag”' })).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(cards.length); // the unknown tag is skipped, not an empty list
+});

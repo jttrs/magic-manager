@@ -38,3 +38,13 @@ def test_routes(tmp_db):
     c = TestClient(create_app())
     assert [t["slug"] for t in c.get("/api/oracle-tags", params={"q": "burn"}).json()["tags"]] == ["burn", "burn-player"]
     assert c.get("/api/oracle-tags/cards", params={"tags": "burn-player,lifegain"}).json()["oracle_ids"] == ["o2", "o3"]
+
+
+def test_search_edges(tmp_db):
+    assert scryfall_tags.oracle_tag_search("") == []                     # empty needle: nothing
+    with db.connect() as conn:
+        _seed(conn)
+        conn.commit()
+    assert scryfall_tags.oracle_tag_search("burn", limit=1)[0]["slug"] == "burn"   # exact first, limit honoured
+    assert len(scryfall_tags.oracle_tag_search("burn", limit=1)) == 1
+    assert scryfall_tags.oracles_with_tags([]) == ([], set())

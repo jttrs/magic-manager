@@ -86,7 +86,15 @@ export function CollectionView() {
 
   // Oracle tags resolve to card ids on the server (each tag rolls up its child tags).
   const tagCards = useQuery({ ...oracleTagCardsQuery(search.ot), enabled: search.ot.length > 0 });
-  const otIds = useMemo(() => (search.ot.length && tagCards.data ? new Set(tagCards.data.oracle_ids) : undefined), [search.ot, tagCards.data]);
+  // Chosen tags never fall back to "no tag filter": while they resolve (or if that
+  // fails) nothing matches and the sheet says why; a tag that no longer exists is
+  // skipped (and named) instead of emptying the list.
+  const missingTags = useMemo(() => (tagCards.data ? search.ot.filter((s) => !tagCards.data.tags.some((t) => t.slug === s)) : []), [search.ot, tagCards.data]);
+  const otIds = useMemo(() => {
+    if (!search.ot.length) return undefined;
+    if (!tagCards.data) return new Set<string>();
+    return tagCards.data.tags.length ? new Set(tagCards.data.oracle_ids) : undefined;
+  }, [search.ot, tagCards.data]);
   const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps, otIds }, rules) : null), [q.data, search, gaps, otIds, rules]);
   // Every control's counts: under all the OTHER filters (core/facets), never its own.
   const facetData = useMemo(
@@ -316,6 +324,15 @@ export function CollectionView() {
         }
       >
         <div className="flex h-full min-h-0 flex-col">
+          {search.ot.length > 0 && (tagCards.isPending || tagCards.isError || missingTags.length > 0) && (
+            <p role={tagCards.isError ? 'alert' : 'status'} className={`mx-sheet py-2 text-sm ${tagCards.isError ? 'text-danger' : 'text-ink-muted'}`}>
+              {tagCards.isPending
+                ? 'Finding the cards with these card tags…'
+                : tagCards.isError
+                  ? `Couldn’t look up the card tags: ${(tagCards.error as Error).message}`
+                  : `No card tag “${missingTags.join('”, “')}” here (the tag may have been renamed, or card tags aren’t loaded) — left out.`}
+            </p>
+          )}
           {q.data?.skipped?.length ? (
             <p role="status" className="mx-sheet py-2 text-sm text-ink-muted">
               Couldn’t find a set family for {q.data.skipped.map((c) => c.toUpperCase()).join(', ')}: left out.
