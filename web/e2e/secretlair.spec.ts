@@ -58,8 +58,7 @@ test('Secret Lair: the live count sits in the sheet header, and the header sort 
   await page.goto('/market?subject=sld');
   const rows = page.locator('tbody th[scope="row"] button[data-drop]');
   await expect(rows).toHaveCount(2);
-  // the count line renders in the header, before the table — not a tagline
-  await expect(page.getByRole('status').filter({ hasText: /of the 2 newest drops/ })).toBeVisible();
+  // the header prints no count line, and no tagline
   await expect(page.getByText('The newest drops: sealed value')).toHaveCount(0);
   await page.getByRole('button', { name: /^Sort: Biggest discount %/ }).click();
   await page.getByRole('menuitemradio', { name: 'Name' }).click();
@@ -92,7 +91,6 @@ test('Secret Lair: Exact and Cheapest columns, the compared one marked; header s
   await expect(garfield).toContainText('$10.00');
   await expect(garfield).toContainText('+ bonus');
   await expect(page.getByRole('row', { name: /Cats of Chaos/ })).not.toContainText('+ bonus');
-  await expect(page.getByRole('status').filter({ hasText: /prices from Nov 12/ })).toBeVisible();
   await page.getByRole('radio', { name: 'Cheapest' }).click();
   await expect(page.getByRole('columnheader', { name: /Cheapest/ })).toContainText('the Gap is measured against');
 });

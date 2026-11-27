@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SurfCardOut, SurfDrawOut } from './api';
 import {
-  activeFilters, artists, decodeSurf, drawRequest, EMPTY_FILTERS, encodeSurf, feedCards, feedEnd, feedSummary, nextPage, ownedLine, printingLine, textFaces, toggleColor,
+  activeFilters, artists, decodeSurf, drawRequest, EMPTY_FILTERS, encodeSurf, feedCards, feedEnd, nextPage, ownedLine, printingLine, textFaces, toggleColor,
 } from './surf';
 
 const card = (id: string, o: Partial<SurfCardOut> = {}): SurfCardOut => ({
@@ -93,12 +93,5 @@ describe('card text', () => {
     const dfc = card('d', { artist: 'Ann', faces: [{ name: 'Up', artist: 'Ann' }, { name: 'Down', artist: 'Bo' }] });
     expect(textFaces(dfc).map((f) => f.name)).toEqual(['Up', 'Down']);
     expect(artists(dfc)).toBe('Ann & Bo');
-  });
-
-  it('summarizes the feed', () => {
-    const fmt = (n: number) => n.toLocaleString('en-US');
-    expect(feedSummary('scryfall', 1470, 12, fmt)).toBe('1,470 match · 12 seen');
-    expect(feedSummary('scryfall', null, 3, fmt)).toBe('3 seen');
-    expect(feedSummary('owned', 214, 0, fmt)).toBe('up to 214 of your cards · 0 seen');
   });
 });

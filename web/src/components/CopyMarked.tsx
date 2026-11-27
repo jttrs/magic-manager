@@ -14,7 +14,7 @@ export type MarkedCopy = { count: number; getText: GetText; onClear?: () => void
  *
  *   const { selected, toggle, clear } = useSelection('explore');
  *   const marked = cards.filter((c) => selected.has(c.key));
- *   <GuideSheet … marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}>
+ *   <GuideSheet … marked={{ count: marked.length, getText: () => exportLines(marked), onClear: clear }}>
  *
  * - `count` 0 → disabled, tooltip "Mark cards to copy them as a list".
  * - `count` N → amber count badge; tooltip "Copy N marked cards as a list".

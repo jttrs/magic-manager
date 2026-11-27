@@ -1,4 +1,4 @@
-import { expect, fixtures, test } from './support';
+import { copyListFor, expect, fixtures, test } from './support';
 
 const products = {
   code: 'blb', name: 'Bloomburrow',
@@ -60,7 +60,7 @@ test('a deck costs out three ways and its buy list uses the cheapest printings',
   await expect(ledger.getByRole('row', { name: /Buy it sealed/ })).toContainText('$30.00');
   await expect(ledger.getByRole('row', { name: /unused cards first/ })).toContainText('$9.00lowest');
   await expect(page.getByRole('table', { name: /To buy/ })).toContainText('XYZ 9');
-  await page.getByRole('button', { name: 'Copy ManaPool list' }).click();
+  await copyListFor(page, 'ManaPool');
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('1 cheap-print [manapool]');
 });

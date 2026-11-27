@@ -1,7 +1,6 @@
 import { useContext, useLayoutEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { SheetHeaderSlots } from './sheetHeaderSlots';
-import { SheetSummarySlot } from './SheetSummary';
 import { ApiError } from '../core/apiError';
 import { Button } from './Button';
 import { CopyMarked, type MarkedCopy } from './CopyMarked';
@@ -13,28 +12,28 @@ import { CopyMarked, type MarkedCopy } from './CopyMarked';
  * - `title` is NEVER printed. It stays the page's accessible `h1` (sr-only, inside
  *   the sheet): the active nav tab, the sub-nav strip and the body's own group
  *   heads already say where you are.
- * - `summary` — the meta line (counts, freshness, what's shown); `arrange` — how
- *   the cards are arranged (`components/ArrangeControls`); `actions` — the view's
- *   header action icons (`IconAction`s). `actionsLabel` names the actions as a
+ * - No summary / stats text (owner decision). `arrange` — how the cards are
+ *   arranged (`components/ArrangeControls`); `buy` — the copy-a-list picker and cart
+ *   check (`components/CopyListMenu`); `actions` — the view's header action icons
+ *   (`IconAction`s). `actionsLabel` names the actions as a
  *   labelled toolbar (pass bare icons, no wrapper). `marked` adds `CopyMarked`
  *   last in the actions. Main-view actions live here, never in the filter rail.
  * - Inside `ViewLayout` the first GuideSheet PORTALS these into the layout's
- *   strip (`SheetHeaderSlots`: stats | arrange | actions), next to the section
+ *   strip (`SheetHeaderSlots`: arrange | buy | actions), right of the section
  *   tabs; the strip's `surface-chrome` remaps paper tokens so controls need no
- *   restyling. Live summaries (`SheetSummary`) land in the strip's stats section.
+ *   restyling.
  *   Outside a layout (or a second sheet under one) the header prints in the
  *   sheet as a compact row; with nothing to show it takes no space.
  *
  * `nav` (tabs at the sheet's top edge) and `hideTitle` are legacy: section modes
  * now go in `ViewLayout`'s `subnav` slot, and every title is hidden.
  */
-export function GuideSheet({ title, summary, actions, actionsLabel, marked, arrange, nav, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; actionsLabel?: string; marked?: MarkedCopy; /** How the cards are arranged (sort, group, grid/list): `components/ArrangeControls`. */ arrange?: ReactNode; nav?: ReactNode; /** @deprecated titles are never printed now */ hideTitle?: boolean; children: ReactNode }) {
+export function GuideSheet({ title, actions, actionsLabel, marked, arrange, buy, nav, children }: { title: ReactNode; actions?: ReactNode; actionsLabel?: string; marked?: MarkedCopy; /** How the cards are arranged (sort, group, grid/list): `components/ArrangeControls`. */ arrange?: ReactNode; /** Lists to copy for a store + cart check (`components/CopyListMenu`): their own group. */ buy?: ReactNode; nav?: ReactNode; /** @deprecated titles are never printed now */ hideTitle?: boolean; children: ReactNode }) {
   const hasActions = Boolean(actions) || marked != null;
-  const bare = !summary && !hasActions && !arrange;
+  const bare = !hasActions && !arrange && !buy;
   const toolbar = actionsLabel != null || marked != null;
   const slots = useContext(SheetHeaderSlots);
   const [claimed, setClaimed] = useState(false);
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
   const owner = slots?.owner;
   // Layout effect: claim the strip before the first paint, so the header never flashes in-sheet.
   useLayoutEffect(() => {
@@ -47,42 +46,32 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, arra
       setClaimed(false);
     };
   }, [owner]);
-  const inStrip = claimed && slots != null && slots.stats != null && slots.arrange != null && slots.actions != null;
+  const inStrip = claimed && slots != null && slots.arrange != null && slots.buy != null && slots.actions != null;
   const arrangeNode = arrange ? <div role="group" aria-label="Arrange" className="flex items-center gap-1">{arrange}</div> : null;
+  const buyNode = buy ? <div role="group" aria-label="Buy" className="flex items-center gap-1">{buy}</div> : null;
   const actionsNode = hasActions ? (
     <div role={toolbar ? 'toolbar' : undefined} aria-label={toolbar ? (actionsLabel ?? 'Sheet actions') : undefined} className={`flex items-center ${toolbar ? 'gap-1' : 'gap-2'}`}>
       {actions}
       {marked && <CopyMarked {...marked} />}
     </div>
   ) : null;
+  const groups = [arrangeNode, buyNode, actionsNode].filter(Boolean);
   return (
     <div className="paper-grain flex h-full min-h-[70dvh] flex-col bg-paper text-ink">
       {nav}
+      <h1 className="sr-only">{title}</h1>
       {inStrip ? (
         <>
-          <h1 className="sr-only">{title}</h1>
-          {summary && createPortal(<span title={typeof summary === 'string' ? summary : undefined}>{summary}</span>, slots.stats!)}
           {arrangeNode && createPortal(arrangeNode, slots.arrange!)}
+          {buyNode && createPortal(buyNode, slots.buy!)}
           {actionsNode && createPortal(actionsNode, slots.actions!)}
         </>
-      ) : bare ? (
-        <h1 className="sr-only">{title}</h1>
-      ) : (
-        <div className="flex min-h-12 flex-wrap items-center gap-x-6 gap-y-2 px-sheet pt-2 pb-1">
-          <div className="min-w-0">
-            <h1 className="sr-only">{title}</h1>
-            {summary && <p className="text-sm tabular text-ink-muted">{summary}</p>}
-            <p ref={setSlot} className="text-sm tabular text-ink-muted empty:hidden" />
-          </div>
-          {(arrangeNode || actionsNode) && (
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
-              {arrangeNode && <div className={hasActions ? 'border-r border-rule pr-2' : ''}>{arrangeNode}</div>}
-              {actionsNode}
-            </div>
-          )}
+      ) : bare ? null : (
+        <div className="flex min-h-12 flex-wrap items-center justify-end divide-x divide-rule px-sheet pt-2 pb-1">
+          {groups.map((g, i) => <div key={i} className="px-2 last:pr-0">{g}</div>)}
         </div>
       )}
-      <div className="min-h-0 flex-1"><SheetSummarySlot.Provider value={inStrip ? slots.stats : slot}>{children}</SheetSummarySlot.Provider></div>
+      <div className="min-h-0 flex-1">{children}</div>
     </div>
   );
 }

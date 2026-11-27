@@ -7,7 +7,7 @@
 import type { DeckCardOut, RecipeOut, ResolvedLineOut } from './api';
 import { TYPE_GROUPS, typeGroup } from './cardFacts';
 import { facetCounts, passes, type Facets } from './facets';
-import { fmtCount, fmtInt } from './format';
+import { fmtInt } from './format';
 import { treatmentLabels, type GuideCard, type GuideGroup } from './guideCard';
 import { DECK_STATUS, RECIPE_ORIGINS, type DeckStatus, type DecksSearch } from './search';
 
@@ -177,14 +177,6 @@ export function coverage(r: Pick<RecipeOut, 'have' | 'short' | 'read' | 'built'>
   return `${fmtInt(r.have)} of ${fmtInt(total)} unused`;
 }
 
-/** The sheet summary: what's listed and what you own of it. */
-export function recipeSummary(shown: readonly RecipeOut[], threshold: number = DEFAULT_BUILDABLE_SHORT): string {
-  const n = (st: DeckStatus) => shown.filter((r) => deckStatus(r, threshold) === st).length;
-  const built = n('built');
-  const buildable = n('buildable');
-  return [fmtCount(shown.length, 'recipe'), built ? `${fmtInt(built)} built` : '', buildable ? `${fmtInt(buildable)} buildable from unused cards` : ''].filter(Boolean).join(' · ');
-}
-
 /** The one Jumpstart set the list is narrowed to (its shopping lists apply), else null. */
 export function jumpstartSet(rs: readonly RecipeOut[], f: Pick<DecksSearch, 'sets'>): string | null {
   if (f.sets.length !== 1) return null;
@@ -240,7 +232,7 @@ export function fromDeckCard(c: DeckCardOut, recipe = false): GuideCard {
     owned: p.owned as GuideCard['owned'],
     missing: recipe ? c.free < c.count : owned === 0,
     tags: [`×${c.count} in deck`, ...(c.pledged_here ? [`${c.pledged_here} pledged`] : []), ...treatmentLabels(p.treatment)],
-    lines: { plain: `${c.count} ${p.name}`, manapool: '', tcgplayer: '' },
+    lines: { plain: `${c.count} ${p.name}` },
     note: recipe ? (c.free >= c.count ? `${fmtInt(c.free)} unused` : c.free ? `${fmtInt(c.free)} of ${fmtInt(c.count)} unused` : 'None unused') : c.free ? `${fmtInt(c.free)} unused` : null,
     typeLine: c.type_line,
     finishes: p.finishes,
@@ -278,6 +270,3 @@ export function deckReviewLines(cards: readonly DeckCardOut[], keys?: ReadonlySe
       note: null,
     }));
 }
-
-/** Unread recipes in view — they count as Unbuilt until read. */
-export const unreadCount = (rs: readonly RecipeOut[]): number => rs.filter((r) => !r.read).length;

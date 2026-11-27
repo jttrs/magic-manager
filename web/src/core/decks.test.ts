@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DeckCardOut, PrintingOut, RecipeOut } from './api';
-import { coverage, readiness, deckStatus, DECK_SECTIONS, deckGuideGroups, deckReviewLines, deckSection, deckTypeCounts, effectiveTypes, filterRecipes, fromDeckCard, groupRecipes, jumpstartSet, optionCounts, ownershipLabel, recipeFileName, recipeSummary, typesToSearch, unreadInSet, type RecipeFilters } from './decks';
+import { coverage, readiness, deckStatus, DECK_SECTIONS, deckGuideGroups, deckReviewLines, deckSection, deckTypeCounts, effectiveTypes, filterRecipes, fromDeckCard, groupRecipes, jumpstartSet, optionCounts, ownershipLabel, recipeFileName, typesToSearch, unreadInSet, type RecipeFilters } from './decks';
 import { decksSearch, legacyDecksSearch } from './search';
 
 const recipe = (o: Partial<RecipeOut>): RecipeOut => ({
@@ -77,7 +77,6 @@ describe('recipe list', () => {
     expect(readiness(recipe({ short: 5 }), 5)).toBe('close');
     expect(readiness(recipe({ read: false, short: null }))).toBeNull();
     expect(rs.map((r) => deckStatus(r))).toEqual(['built', 'buildable', 'unbuilt', 'buildable', 'unbuilt']);
-    expect(recipeSummary(rs)).toBe('5 recipes · 1 built · 2 buildable from unused cards');
   });
   it('leaves the deck type to the default until a set or type is chosen', () => {
     expect(effectiveTypes({ types: [], sets: [] })).toEqual(['Commander']);

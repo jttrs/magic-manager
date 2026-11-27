@@ -92,13 +92,6 @@ export function filterSortDrops(rows: SldRow[], costs: Map<string, ProductCostOu
 /** The value column a Gap is measured against; none when it's measured against something else (sealed/market). */
 export const basisColumn = (basis: string): SldBasis | null => (basis === 'exact' || basis === 'floor' ? basis : null);
 
-/** The oldest `prices_at` across the loaded costs (ISO strings sort by time); null when none carries one. */
-export function oldestPricesAt(costs: Iterable<ProductCostOut | undefined>): string | null {
-  let oldest: string | null = null;
-  for (const c of costs) if (c?.prices_at && (oldest == null || c.prices_at < oldest)) oldest = c.prices_at;
-  return oldest;
-}
-
 /** A drop's cost lines split into the guaranteed cards and its bonus groups. */
 export function splitBonus(lines: DeckLineOut[] | undefined): { cards: DeckLineOut[]; named: DeckLineOut[]; possible: DeckLineOut[] } {
   const ls = lines ?? [];

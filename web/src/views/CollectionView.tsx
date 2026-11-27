@@ -5,12 +5,13 @@ import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
-import { CopyTargets } from '../components/CopyButton';
-import { buyListTargets } from '../components/buyTargets';
-import { AddCardMark, CountCardsMark } from '../components/icons/marks';
+import { buyListTargets, type BuyStore } from '../components/buyTargets';
+import { CopyListMenu } from '../components/CopyListMenu';
+import { AddCardMark, CartCheckMark, CountCardsMark } from '../components/icons/marks';
 import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
+import { summaryLine } from '../core/checklist';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { useChecklist } from './collection/useChecklist';
 import { SceneDetail, SceneMeta } from './collection/SceneHead';
@@ -28,9 +29,8 @@ import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '.
 import { activeRules, collectionPresets, collectionSortKeys, COLLECTION_SORT, NO_SCENE, sceneRanks, type CollectionSortKey } from '../core/scenes';
 import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, NO_FUNCTION, setGroupIncluded, TRAITS, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
-import { summaryLine } from '../core/checklist';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { exportLines, familiesInCardOrder, familyFacts, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
+import { familiesInCardOrder, familyFacts, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch, COLLECTION_SORT_DEFAULT } from '../core/search';
 import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../core/sort';
 
@@ -111,7 +111,7 @@ export function CollectionView() {
   const counting = search.count && scope.length > 0;
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
-  const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
+  const buyText = (target: BuyStore) => async () => {
     const r = await collectionBuyList({
       body: { target, items: buyPool.map((c) => ({ scryfall_id: c.scryfall_id, finish: buyFinish(c, search.exclude), qty: 1 })) },
     });
@@ -225,15 +225,6 @@ export function CollectionView() {
           <Button emphasis="link" onClick={() => set(RESET)} className="self-start text-sm">Reset filters</Button>
         )}
       </SideSection>
-      <SideSection title="Buy">
-        <CopyTargets
-          describe={() => `${fmtCount(buyPool.length, 'card')} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
-          targets={buyListTargets(buyText)}
-        />
-        {cartCheck && (
-          <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<Button>Check my cart</Button>} />
-        )}
-      </SideSection>
     </>
   );
 
@@ -265,6 +256,7 @@ export function CollectionView() {
     const familyNames = new Map(q.data.families.map((f) => [f.code, f.name]));
     body = (
       <div className="flex h-full min-h-0 flex-col">
+        <p role="status" aria-live="polite" className="mx-sheet py-2 text-sm tabular text-ink-muted">{summaryLine(checklist.summary, checklist.saved)}</p>
         <ChecklistNotes checklist={checklist} />
         <ChecklistTable sections={view.sections} byId={view.byId} familyNames={familyNames} checklist={checklist} />
       </div>
@@ -273,13 +265,6 @@ export function CollectionView() {
     body = <VirtualGuide sections={view.sections} density={search.view} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
   }
 
-  const s = view?.stats;
-  const famN = q.data?.families.length ?? 0;
-  const skipped = q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : '';
-  const showMissing = search.show.includes('missing');
-  type Stats = NonNullable<typeof s>;
-  const full = (st: Stats) => `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(st.printings)} printings: ${fmtInt(st.owned)} owned (${fmtInt(st.copies)} copies), ${gaps && showMissing ? `${fmtInt(st.missingCards)} cards you own in no printing · ${fmtUsd(st.missingCardsUsd)}${st.missingCardsUnpriced ? '+' : ''} at the cheapest printing of each` : `${fmtInt(st.missing)} missing · ${fmtUsd(st.missingUsd)}${st.missingUnpriced ? '+' : ''} to complete`}${skipped}`;
-  const short = (st: Stats) => `${fmtInt(st.printings)} printings · ${fmtInt(st.copies)} copies${showMissing ? (gaps ? ` · ${fmtInt(st.missingCards)} cards missing · ${fmtUsd(st.missingCardsUsd)}${st.missingCardsUnpriced ? '+' : ''} at the cheapest printing` : ` · ${fmtInt(st.missing)} missing · ${fmtUsd(st.missingUsd)}${st.missingUnpriced ? '+' : ''} to complete`) : ''}${skipped}`;
   return (
     <ViewLayout label="Collection controls" summary={controlsSummary(search, fams.data)} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
@@ -297,7 +282,19 @@ export function CollectionView() {
           </>
         }
         actionsLabel="Collection actions"
-        marked={view ? { count: marked.length, getText: () => exportLines(view.cards.filter((c) => selected.has(c.key)), 'plain'), onClear: clear } : undefined}
+        buy={
+          <>
+            <CopyListMenu
+              describe={() => `${marked.length ? fmtCount(marked.length, 'marked card') : fmtCount(buyPool.length, 'missing card')} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
+              targets={buyListTargets(buyText, { exports: true })}
+              disabledReason={view && buyPool.length === 0 ? 'Nothing to buy: no missing or marked cards shown' : undefined}
+              marked={{ count: marked.length, onClear: clear }}
+            />
+            {cartCheck && (
+              <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<IconAction label="Check my cart" Icon={CartCheckMark} />} />
+            )}
+          </>
+        }
         actions={
           <>
             {counting && <ChecklistActions checklist={checklist} />}
@@ -312,20 +309,15 @@ export function CollectionView() {
             <AddCardsDialog trigger={<IconAction Icon={AddCardMark} label="Add cards" />} />
           </>
         }
-        summary={
-          counting
-            ? summaryLine(checklist.summary, checklist.saved)
-            : s
-            ? (
-              <span title={full(s)}>
-                {short(s)}
-                <span className="sr-only">{full(s)}</span>
-              </span>
-            )
-            : undefined
-        }
       >
-        {body}
+        <div className="flex h-full min-h-0 flex-col">
+          {q.data?.skipped?.length ? (
+            <p role="status" className="mx-sheet py-2 text-sm text-ink-muted">
+              Couldn’t find a set family for {q.data.skipped.map((c) => c.toUpperCase()).join(', ')}: left out.
+            </p>
+          ) : null}
+          <div className="min-h-0 flex-1">{body}</div>
+        </div>
       </GuideSheet>
       <ChecklistLeaveGuard checklist={checklist} />
     </ViewLayout>

@@ -1,0 +1,113 @@
+import { DropdownMenu, Popover } from 'radix-ui';
+import { useState } from 'react';
+import type { CopyTarget } from './CopyButton';
+import { IconTooltip } from './IconTooltip';
+import { iconActionClass } from './iconActionClass';
+import { menuItemClass, menuLabelClass, menuPanelClass, menuSeparatorClass } from './controls/surfaces';
+import { markBadge } from '../core/marks';
+import { BuyListMark, CheckMark, CloseMark } from './icons/marks';
+import { copiedMessage, useCopy } from './useCopy';
+
+/** A choice that changes WHAT gets copied (e.g. Cheapest vs Deck's printings). */
+export type CopyListOption<T extends string> = { label: string; value: T; options: readonly { value: T; label: string }[]; onChange: (v: T) => void; /** One line saying what the choice changes. */ hint?: string };
+
+/** ONE icon in the strip's Buy group that copies a bulk list for a store: a menu
+ *  headed by what will be copied (`describe`, e.g. "12 marked cards" or "140 missing
+ *  cards · ≈ $212"), an optional choice of WHICH list, then one item per destination
+ *  — each in that store's own format (`buyListTargets`). The result shows in a small
+ *  bubble on the icon and is announced politely. */
+export function CopyListMenu<T extends string>({ targets, describe, option, disabledReason, marked }: {
+  targets: readonly CopyTarget[];
+  describe: () => string;
+  option?: CopyListOption<T>;
+  /** Why nothing can be copied right now (shown instead of opening the menu). */
+  disabledReason?: string;
+  /** Cards marked in the view: their count rides the icon, and the menu can clear them. */
+  marked?: { count: number; onClear: () => void };
+}) {
+  const { status, failed, busy, copy } = useCopy();
+  const [bubble, setBubble] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const label = 'Copy a list for a store';
+  // Disabled = aria-disabled, never the native attribute: the trigger keeps focus and its
+  // tooltip says why (like IconAction), and the menu simply won't open.
+  const blocked = !!disabledReason || busy != null;
+  const pick = (t: CopyTarget) => {
+    setOpen(false); // close first: the copy marks the picker busy, which must not leave the menu half-open
+    setBubble(copiedMessage(describe(), t.name, t.note));
+    void copy(t.id, t.getText, t.note);
+  };
+  const text = !failed && bubble ? bubble : status;
+  return (
+    <Popover.Root open={!!status && busy == null} onOpenChange={(o) => !o && setBubble(null)}>
+      <DropdownMenu.Root open={open && !blocked} onOpenChange={(o) => setOpen(o && !blocked)}>
+        <Popover.Anchor asChild>
+          <span className="inline-flex">
+            <IconTooltip label={disabledReason ?? (busy ? 'Building the list…' : label)}>
+              <DropdownMenu.Trigger aria-label={label} aria-disabled={blocked || undefined} aria-description={disabledReason} className={iconActionClass('paper')}>
+                {status && !failed ? <CheckMark className="size-icon-md" /> : <BuyListMark className={`size-icon-md ${busy ? 'animate-pulse' : ''}`} />}
+                {marked && marked.count > 0 && (
+                  <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-pill bg-accent px-1 text-2xs font-bold leading-none tabular text-on-accent">{markBadge(marked.count)}</span>
+                )}
+              </DropdownMenu.Trigger>
+            </IconTooltip>
+          </span>
+        </Popover.Anchor>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={4} collisionPadding={12} className={`${menuPanelClass} w-[min(20rem,calc(100vw-1.5rem))] py-1`}>
+            <DropdownMenu.Label className={menuLabelClass}>Copy {describe()}</DropdownMenu.Label>
+            {option && (
+              <>
+                <DropdownMenu.Separator className={menuSeparatorClass} />
+                <DropdownMenu.Label className={menuLabelClass}>{option.label}</DropdownMenu.Label>
+                {option.hint && <p className="px-3 pb-1 text-xs leading-snug text-on-chrome-muted">{option.hint}</p>}
+                <DropdownMenu.RadioGroup value={option.value} onValueChange={(v) => option.onChange(v as T)}>
+                  {option.options.map((o) => (
+                    <DropdownMenu.RadioItem key={o.value} value={o.value} onSelect={(e) => e.preventDefault()} className={menuItemClass}>
+                      <span aria-hidden="true" className="w-3 text-accent"><DropdownMenu.ItemIndicator><CheckMark className="size-icon-xs" /></DropdownMenu.ItemIndicator></span>
+                      {o.label}
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </>
+            )}
+            <DropdownMenu.Separator className={menuSeparatorClass} />
+            <DropdownMenu.Label className={menuLabelClass}>Copy for</DropdownMenu.Label>
+            {targets.map((t) => (
+              <DropdownMenu.Item key={t.id} onSelect={() => pick(t)} className={menuItemClass}>
+                <t.Mark className="size-icon-sm shrink-0 text-accent" />
+                <span className="flex min-w-0 flex-col">
+                  <span>{t.name}</span>
+                  {t.format && <span className="text-xs text-on-chrome-muted">{t.format}</span>}
+                </span>
+              </DropdownMenu.Item>
+            ))}
+            {marked && marked.count > 0 && (
+              <>
+                <DropdownMenu.Separator className={menuSeparatorClass} />
+                <DropdownMenu.Item onSelect={marked.onClear} className={menuItemClass}>
+                  <CloseMark className="size-icon-sm shrink-0 text-on-chrome-muted" />
+                  Clear {marked.count === 1 ? 'the mark' : `all ${marked.count} marks`}
+                </DropdownMenu.Item>
+              </>
+            )}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <Popover.Portal>
+        <Popover.Content
+          side="bottom"
+          align="end"
+          sideOffset={6}
+          collisionPadding={12}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className={`${menuPanelClass} max-w-[16rem] px-2.5 py-1.5 text-sm leading-snug focus:outline-none ${failed ? 'border-danger' : ''}`}
+        >
+          {text}
+        </Popover.Content>
+      </Popover.Portal>
+      <span aria-live="polite" className="sr-only">{status}</span>
+    </Popover.Root>
+  );
+}

@@ -5,22 +5,22 @@ import { jumpstartQuery, recipesQuery } from '../app/queries';
 import { useJob } from '../app/useJob';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { ViewLayout } from '../components/AppShell';
-import { CopyTargets } from '../components/CopyButton';
 import type { MarkedCopy } from '../components/CopyMarked';
 import { IconAction } from '../components/IconAction';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
 import { ProgressRule } from '../components/ProgressRule';
-import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
+import { ChipToggles, SideSection, TextField } from '../components/Sidebar';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
-import { buyListTargets } from '../components/buyTargets';
+import { buyListTargets, type BuyStore } from '../components/buyTargets';
+import { CopyListMenu } from '../components/CopyListMenu';
 import { ImportDeckMark, NewDeckMark, RereadMark } from '../components/icons/marks';
 import { jumpstartBuyList } from '../core/api';
-import { DECK_GROUP_LABEL, DECK_GROUPS, effectiveTypes, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, typesToSearch, unreadCount, unreadInSet, type DeckGroupBy } from '../core/decks';
+import { DECK_GROUP_LABEL, DECK_GROUPS, effectiveTypes, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, typesToSearch, unreadInSet, type DeckGroupBy } from '../core/decks';
 import { fmtCount, fmtInt } from '../core/format';
 import { shopDescribe, type Shop } from '../core/jumpstart';
-import { DECK_STATUS, type DecksSearch, type DeckStatus } from '../core/search';
+import { type DecksSearch, type DeckStatus } from '../core/search';
 import { useBuildableShort, useDecksSettings } from '../app/deckPrefs';
 import { DeckInspector } from './decks/DeckInspector';
 import { ImportDeckDialog } from './decks/ImportDeckDialog';
@@ -50,7 +50,6 @@ export function DecksView() {
   const shown = useMemo(() => filterRecipes(all, filters, threshold), [all, filters, threshold]);
   const counts = useMemo(() => optionCounts(all, filters, threshold), [all, filters, threshold]);
   const groups = useMemo(() => groupRecipes(shown, search.group, threshold), [shown, search.group, threshold]);
-  const unreadShown = useMemo(() => unreadCount(filterRecipes(all, { ...filters, status: [...DECK_STATUS] }, threshold)), [all, filters, threshold]);
 
   // The open recipe: a deck's slug (any copy) or `fn:<fileName>` — a catalog recipe resolves to
   // your deck once you own it, so adding a pack keeps it open.
@@ -75,6 +74,14 @@ export function DecksView() {
     resetRead();
     void startRead('decks.read_recipes', { set: oneSet }).then((err) => err && setStartError(err));
   };
+  // A running or failed read says so in the sheet (the strip prints no status text).
+  const readNotice = reading ? (
+    <div role="status" className="mx-sheet py-2">
+      <ProgressRule label={`Reading ${readCode?.toUpperCase() ?? ''} recipes`} verb="Reading" done={readLive?.done ?? 0} total={readLive?.total ?? null} message={readLive?.log.at(-1)?.msg} />
+    </div>
+  ) : readError ? (
+    <p role="alert" className="mx-sheet py-2 text-sm text-danger">{readError}</p>
+  ) : null;
   useEffect(() => {
     if (readLive?.status === 'succeeded') void refreshRecipes(qc);
   }, [readLive?.status, qc]);
@@ -127,7 +134,6 @@ export function DecksView() {
           options={counts.sets}
         />
       </SideSection>
-      {jsSet && <JumpstartBuy code={jsSet} shop={search.shop} onShop={(shop) => set({ shop })} />}
     </>
   );
 
@@ -151,17 +157,6 @@ export function DecksView() {
     body = narrow ? (search.deck ? inspector : list) : <SplitPanes id="mm.decks.split" detailId="deck" label="Resize recipe list" list={list} inspector={inspector} />;
   }
 
-  const summary = reading ? (
-    <ProgressRule label={`Reading ${readCode?.toUpperCase() ?? ''} recipes`} verb="Reading" done={readLive?.done ?? 0} total={readLive?.total ?? null} message={readLive?.log.at(-1)?.msg} />
-  ) : readError ? (
-    <span role="alert" className="text-danger">{readError}</span>
-  ) : recipes.data ? (
-    <>
-      {recipeSummary(shown, threshold)}
-      {search.status.includes('buildable') && unreadShown > 0 && ` · ${fmtCount(unreadShown, 'recipe')} not read yet — they count as Unbuilt until read${oneSet ? ' (use the read icon above)' : ''}`}
-    </>
-  ) : undefined;
-
   return (
     <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} recipes`} sidebar={sidebar}>
       <GuideSheet
@@ -172,7 +167,7 @@ export function DecksView() {
             <ViewToggle value={search.view} onChange={(view) => set({ view })} />
           </>
         }
-        summary={<span role="status" aria-live="polite">{summary}</span>}
+        buy={jsSet ? <JumpstartBuy code={jsSet} shop={search.shop} onShop={(shop) => set({ shop })} /> : undefined}
         actionsLabel="Deck list actions"
         marked={marked ?? undefined}
         actions={
@@ -191,43 +186,33 @@ export function DecksView() {
           </>
         }
       >
-        {body}
+        <div className="flex h-full min-h-0 flex-col">
+          {readNotice}
+          <div className="min-h-0 flex-1">{body}</div>
+        </div>
       </GuideSheet>
     </ViewLayout>
   );
 }
 
-/** Jumpstart's two shopping lists for the one set in view. */
+/** Jumpstart's two shopping lists for the one set in view, as the strip's copy picker. */
 function JumpstartBuy({ code, shop, onShop }: { code: string; shop: Shop; onShop: (s: Shop) => void }) {
   const q = useQuery(jumpstartQuery(code));
-  const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
+  const buyText = (target: BuyStore) => async () => {
     const r = await jumpstartBuyList({ path: { code }, body: { shop, target } });
     if (r.error || !r.data) throw new Error('buy-list failed');
     return r.data.text;
   };
+  const why = q.data?.ready ? undefined
+    : q.data ? 'Read the set’s packs first (the read icon)'
+    : q.isError ? `Couldn’t load the shopping lists: ${(q.error as Error).message}`
+    : 'Loading the shopping lists…';
   return (
-    <SideSection title="Buy">
-      <Segmented<Shop>
-        label="Shop for"
-        showLabel
-        labelExtra={
-          <InfoTip label="What do the two lists buy?">
-            <b>Every theme</b>: the cards you’re missing to keep one built copy of every theme at once, plus each theme’s cards from its other versions — so any version can be assembled. Copies already in built packs count as yours. <b>Packs I don’t own</b>: each pack version you have no copy of, card for card, with its front card.
-          </InfoTip>
-        }
-        value={shop}
-        onChange={onShop}
-        options={[{ value: 'buildable', label: 'Every theme' }, { value: 'packs', label: 'Packs I don’t own' }]}
-      />
-      {q.data?.ready ? (
-        <CopyTargets describe={() => shopDescribe(shop, q.data)} targets={buyListTargets(buyText)} />
-      ) : q.data ? (
-        <p className="text-sm text-on-chrome-muted">Read the set’s packs first (the read icon above the list).</p>
-      ) : q.isError ? (
-        <p role="alert" className="text-sm text-danger">Couldn’t load the shopping lists: {(q.error as Error).message}</p>
-      ) : (
-        <p role="status" className="text-sm text-on-chrome-muted">Loading the shopping lists…</p>
-      )}
-    </SideSection>
+    <CopyListMenu<Shop>
+      describe={() => (q.data ? shopDescribe(shop, q.data) : 'the shopping list')}
+      targets={buyListTargets(buyText, { exports: true })}
+      disabledReason={why}
+      option={{ label: 'Shop for', value: shop, onChange: onShop, hint: 'Every theme: the cards you’re missing to keep one built copy of every theme, plus each theme’s other-version cards. Packs I don’t own: each pack version you have no copy of, card for card.', options: [{ value: 'buildable', label: 'Every theme' }, { value: 'packs', label: 'Packs I don’t own' }] }}
+    />
   );
 }

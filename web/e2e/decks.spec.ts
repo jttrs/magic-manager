@@ -11,7 +11,6 @@ test('recipe list shows your built decks by default; status, source, deck type a
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
   await expect(list.getByRole('button')).toHaveCount(owned.length);
-  await expect(page.getByRole('status').filter({ hasText: `${owned.length} recipes` })).toBeVisible();
   // The rail reads Find (the search field alone) → Show.
   const rail = page.getByRole('complementary', { name: 'Deck controls' });
   await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show']);
@@ -52,7 +51,7 @@ test('recipe list shows your built decks by default; status, source, deck type a
   await page.getByRole('menuitemradio', { name: 'Color' }).click();
   await expect(page).toHaveURL(/group=color/);
   await expect(list.getByRole('heading', { name: /^Red/ })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Card view' }).getByRole('button', { name: /view$/ })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: /^Switch to (list|grid) view$/ })).toHaveCount(1);
 });
 
 test('old built-only links keep showing only built recipes', async ({ page }) => {

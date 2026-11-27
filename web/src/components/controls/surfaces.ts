@@ -28,5 +28,8 @@ export const menuPanelClass = 'z-60 rounded-sm border border-chrome-line bg-chro
 /** A menu's small caps heading. */
 export const menuLabelClass = 'px-3 pb-1 pt-1.5 text-xs voice-condensed uppercase tracking-caps text-on-chrome-muted';
 
+/** A hairline between a menu's groups. */
+export const menuSeparatorClass = 'my-1 h-px bg-chrome-line';
+
 /** One menu item (radio or plain). */
 export const menuItemClass = 'flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm outline-none data-[highlighted]:bg-chrome-line data-[state=checked]:text-accent data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45';

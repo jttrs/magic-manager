@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 
 export type GetText = () => string | Promise<string>;
 
+/** The one "what was copied" sentence for a copy bubble: `Copied 140 missing cards for TCGplayer. <note>`. */
+export const copiedMessage = (what: string, name: string, note?: string): string => `Copied ${what} for ${name}${note ? `. ${note}` : ''}`;
+
 /** Clipboard copy with a polite status line shared by one or more buttons.
  *  `failed` is true while the status line reports a failure; every outcome's
  *  status clears itself (one timer, so a newer copy cancels an older clear). */

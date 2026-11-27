@@ -223,7 +223,6 @@ test('the watchlist: a filterable table with an inspector; read prices again', a
   await expect(row).toContainText('$90.00+');
   await expect(row).toContainText('$70.00');
   await expect(row).not.toContainText('boosters');
-  await expect(page.getByText('2 of 2 watched products · compared to sealed value')).toBeVisible();
 
   // Search and type filters.
   await page.getByLabel('Product name or set', { exact: true }).fill('frogs');

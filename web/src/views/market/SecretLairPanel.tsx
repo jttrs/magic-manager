@@ -11,16 +11,15 @@ import { Segmented, SelectField, SideSection, TextField } from '../../components
 import { EmptyNote, ErrorNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
 import { DISCOUNT_SORT_LABEL } from '../../core/deals';
-import { fmtDay, fmtInt, fmtUsd } from '../../core/format';
+import { fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
-import { filterSortDrops, oldestPricesAt, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldRows, splitBonus, watchKey, type SldBasis, type SldEdition, type SldRow, type SldSort } from '../../core/secretLair';
+import { filterSortDrops, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldRows, splitBonus, watchKey, type SldBasis, type SldEdition, type SldRow, type SldSort } from '../../core/secretLair';
 import { CardTile } from '../../components/CardTile';
 import { CardValueCells, CardValueHeads } from './CardValueCells';
 import { fromCostLine } from '../../core/guideCard';
 import { MasterDetail } from './DealsWorkspace';
 import type { CostState } from './useDealsData';
 import { SldInspector } from './SldInspector';
-import { SheetSummary } from '../../components/SheetSummary';
 
 type Set = (patch: Partial<MarketSearch>) => void;
 type SldCosts = { data: Map<string, ProductCostOut | undefined>; state: Map<string, CostState> };
@@ -118,8 +117,6 @@ export function SecretLairPanel({ search, set }: { search: MarketSearch; set: Se
   const watched = useWatchedDrops();
   const shown = useMemo(() => filterSortDrops(rows, costs.data, filtersOf(search)), [rows, costs.data, search]);
   const selected = rows.find((r) => r.key === search.item);
-  const pricesFrom = oldestPricesAt(costs.data.values());
-  const pricing = rows.filter((r) => costs.state.get(r.key)?.loading).length;
   const body = list.isPending ? (
     <p role="status" className="text-md text-ink-muted">Listing the newest drops…</p>
   ) : list.isError ? (
@@ -132,11 +129,6 @@ export function SecretLairPanel({ search, set }: { search: MarketSearch; set: Se
     </EmptyNote>
   ) : (
     <>
-      <SheetSummary>
-        {fmtInt(shown.length)} of the {fmtInt(rows.length)} newest drops · compared to {SLD_BASIS_LABEL[search.sbasis]}
-        {pricing > 0 && ` · pricing ${fmtInt(pricing)}…`}
-        {pricesFrom && ` · prices from ${fmtDay(pricesFrom)}`}
-      </SheetSummary>
       <DropTable shown={shown} costs={costs} basis={search.sbasis} watched={watched} item={selected?.key} onPick={(item) => set({ item })} />
       {list.data && list.data.total > rows.length && search.sldN < SLD_LIMITS[SLD_LIMITS.length - 1] && (
         <Button tone="paper" className="self-start" onClick={() => set({ sldN: SLD_LIMITS.find((n) => n > search.sldN) })}>

@@ -3,51 +3,41 @@
 // rearrange. Choosing these never changes WHICH cards show; filters stay in the rail.
 import { DropdownMenu, Popover } from 'radix-ui';
 import type { ComponentType, ReactNode, SVGProps } from 'react';
-import { sortShort, sortSummary, type SortPreset, type SortRule } from '../core/sort';
+import { sortSummary, type SortPreset, type SortRule } from '../core/sort';
 import { IconTooltip } from './IconTooltip';
 import { iconActionClass } from './iconActionClass';
 import { SortRulesEditor } from './SortBuilder';
-import { CaretMark, CheckMark, GridMark, GroupMark, ListMark, SortMark } from './icons/marks';
+import { IconAction } from './IconAction';
+import { CheckMark, GridMark, GroupMark, ListMark, SortMark } from './icons/marks';
 import { menuLabelClass, menuPanelClass } from './controls/surfaces';
 
 type Mark = ComponentType<SVGProps<SVGSVGElement>>;
 
-/** The header trigger: the control's mark, then its current choice (hidden on phones,
- *  where a small amber dot says "not the default" instead). */
-const TRIGGER =
-  'touch-hit inline-flex min-h-control max-w-[14rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm voice-semi text-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk';
+/** The header trigger: the control's mark only — the current choice lives in its
+ *  tooltip and accessible name; a small amber dot says "not the default". */
+const TRIGGER = `${iconActionClass('paper')} data-[state=open]:bg-paper-sunk`;
 
-function TriggerFace({ Icon, short, changed }: { Icon: Mark; short: string; changed: boolean }) {
+function TriggerFace({ Icon, changed }: { Icon: Mark; changed: boolean }) {
   return (
-    <>
-      <span className="relative text-accent-ink">
-        <Icon className="size-icon-md" />
-        {changed && <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 size-1.5 rounded-pill bg-accent sm:hidden" />}
-      </span>
-      <span className="hidden min-w-0 truncate sm:inline">{short}</span>
-      <CaretMark className="hidden size-icon-sm text-ink-muted sm:inline" />
-    </>
+    <span className="relative">
+      <Icon className="size-icon-md" />
+      {changed && <span aria-hidden="true" className="absolute -right-1 -top-1 size-1.5 rounded-pill bg-accent" />}
+    </span>
   );
 }
 
 const MENU = menuPanelClass;
 
-/** Grid or list, as two pressed-state icon buttons. */
-export function ViewToggle<V extends 'grid' | 'list'>({ value, onChange, label = 'Card view' }: { value: V; onChange: (v: V) => void; label?: string }) {
-  const opts: { v: V; text: string; Icon: Mark }[] = [
-    { v: 'grid' as V, text: 'Grid', Icon: GridMark },
-    { v: 'list' as V, text: 'List', Icon: ListMark },
-  ];
+/** Grid or list: ONE icon button showing the current view; a click switches to the
+ *  other. Its tooltip / accessible name says what a click does. */
+export function ViewToggle<V extends 'grid' | 'list'>({ value, onChange }: { value: V; onChange: (v: V) => void }) {
+  const next = (value === 'grid' ? 'list' : 'grid') as V;
   return (
-    <div role="group" aria-label={label} className="flex items-center">
-      {opts.map(({ v, text, Icon }) => (
-        <IconTooltip key={v} label={`${text} view`}>
-          <button type="button" aria-label={`${text} view`} aria-pressed={value === v} onClick={() => onChange(v)} className={iconActionClass('paper')}>
-            <Icon className="size-icon-md" />
-          </button>
-        </IconTooltip>
-      ))}
-    </div>
+    <IconAction
+      label={next === 'list' ? 'Switch to list view' : 'Switch to grid view'}
+      Icon={value === 'grid' ? GridMark : ListMark}
+      onClick={() => onChange(next)}
+    />
   );
 }
 
@@ -69,7 +59,7 @@ function ArrangeMenu<T extends string>({ label, Icon, value, options, onChange, 
     <DropdownMenu.Root>
       <IconTooltip label={`${label}: ${current}`}>
         <DropdownMenu.Trigger aria-label={`${label}: ${current}`} className={TRIGGER}>
-          <TriggerFace Icon={Icon} short={current} changed={defaultValue != null && value !== defaultValue} />
+          <TriggerFace Icon={Icon} changed={defaultValue != null && value !== defaultValue} />
         </DropdownMenu.Trigger>
       </IconTooltip>
       <DropdownMenu.Portal>
@@ -131,7 +121,7 @@ export function SortControl<K extends string>({ keys, rules, presets, onChange, 
     <Popover.Root>
       <IconTooltip label={`Sort: ${full}`}>
         <Popover.Trigger aria-label={`Sort: ${full}`} className={TRIGGER}>
-          <TriggerFace Icon={SortMark} short={sortShort(keys, rules)} changed={changed} />
+          <TriggerFace Icon={SortMark} changed={changed} />
         </Popover.Trigger>
       </IconTooltip>
       <Popover.Portal>

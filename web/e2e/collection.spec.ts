@@ -1,4 +1,4 @@
-import { COLLECTION_ALL_URL, COLLECTION_URL, expect, fixtures, test } from './support';
+import { COLLECTION_ALL_URL, COLLECTION_URL, copyListFor, expect, fixtures, test } from './support';
 
 const cards = fixtures.collectionBlb.cards;
 const total = (c: (typeof cards)[number]) => Object.values(c.owned).reduce((s: number, n) => s + (n as number), 0);
@@ -134,15 +134,15 @@ test('sort builder: presets, keyboard reorder, direction, URL', async ({ page })
 
 test('buy list copies the missing printings shown (or the marked ones)', async ({ page }) => {
   await page.goto(COLLECTION_ALL_URL);
-  await page.getByRole('button', { name: 'Copy ManaPool list' }).click();
+  await copyListFor(page, 'ManaPool');
   await expect(page.getByText(`Copied ${missingN} lines`)).toBeVisible();
   const first = cards.find((c) => total(c) === 0)!;
   await page.getByRole('button', { name: `Mark ${first.name}` }).first().click();
-  await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
-  await expect(page.getByText(/^Copied 1 cards? · ≈ \$[\d.,]+ at market for TCGplayer/)).toBeVisible();
+  await copyListFor(page, 'TCGplayer');
+  await expect(page.getByText(/^Copied 1 marked cards? · ≈ \$[\d.,]+ at market for TCGplayer/)).toBeVisible();
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [tcgplayer]`);
-  await page.getByRole('button', { name: 'Copy Card Kingdom list' }).click();
+  await copyListFor(page, 'Card Kingdom');
   await expect(page.getByRole('dialog').filter({ hasText: /Card Kingdom takes names only/ })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [cardkingdom]`);
 });
@@ -191,25 +191,50 @@ test('pressing the art inspects a card (large art, facts, Scryfall/TCGplayer lin
   await expect(page.getByRole('button', { name: `Unmark ${name}` }).first()).toBeVisible();
 });
 
-test('the rail reads Find → Show → Buy, with the card-name search first', async ({ page }) => {
+test('the rail reads Find → Show, with the card-name search first', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   const rail = page.getByRole('complementary').or(page.locator('aside')).first();
-  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show', 'Buy']);
+  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show']);
   await expect(page.getByRole('heading', { level: 1, name: 'Collection' })).toHaveClass(/sr-only/);
 });
 
 test('“Missing means” is a Settings preference, not a rail filter, and it sticks', async ({ page }) => {
   await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByText('Missing means')).toHaveCount(0);
-  await expect(page.getByText(/missing · \$/)).toBeVisible();
-  await page.getByRole('button', { name: 'Settings' }).click();
-  const settings = page.getByRole('dialog', { name: 'Settings' });
-  await settings.getByRole('radiogroup', { name: 'Missing means' }).getByRole('radio', { name: 'The card' }).click();
+  const means = async () => {
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const group = page.getByRole('dialog', { name: 'Settings' }).getByRole('radiogroup', { name: 'Missing means' });
+    return group;
+  };
+  await (await means()).getByRole('radio', { name: 'The card' }).click();
   await page.keyboard.press('Escape');
-  await expect(page.getByText(/cards you own in no printing/)).toBeVisible();
   await expect(page).not.toHaveURL(/gaps/);
+  // The choice changes what Missing means: the rail's explanation now says "no printing".
+  await page.getByRole('button', { name: 'What does missing mean?' }).focus();
+  await expect(page.getByRole('tooltip')).toContainText('cards you own in no printing');
   await page.reload();
-  await expect(page.getByText(/cards you own in no printing/)).toBeVisible();
+  await expect((await means()).getByRole('radio', { name: 'The card' })).toBeChecked();
+});
+
+test('the copy picker: marked count badge, clear the marks, and a disabled picker says why', async ({ page }) => {
+  await page.goto(COLLECTION_URL); // owned cards only: nothing to buy
+  const picker = page.getByRole('button', { name: 'Copy a list for a store' });
+  await expect(picker).toHaveAttribute('aria-disabled', 'true');
+  await expect(picker).toHaveAttribute('aria-description', /Nothing to buy/);
+  await picker.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
+  const marks = page.getByRole('button', { name: /^Mark / });
+  await marks.nth(0).click();
+  await marks.nth(0).click(); // the first mark became Unmark, so nth(0) is the next card
+  await expect(picker).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(picker).toContainText('2');
+  await picker.click();
+  await expect(page.getByRole('menu')).toContainText('Copy 2 marked cards');
+  await page.getByRole('menuitem', { name: 'Clear all 2 marks' }).click();
+  await expect(page.getByRole('button', { name: /^Unmark / })).toHaveCount(0);
+  await expect(picker).toHaveAttribute('aria-disabled', 'true');
 });
 
 test('earmarked cards carry a mark, and a filter shows only them', async ({ page }) => {

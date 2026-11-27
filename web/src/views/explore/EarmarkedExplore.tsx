@@ -12,7 +12,6 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components
 import { VirtualGuide } from '../../components/VirtualGuide';
 import type { EarmarkEntryOut } from '../../core/api';
 import { earmarkCard, earmarkDecks, earmarkLine, earmarkSections, filterEarmarks } from '../../core/cardEarmarks';
-import { fmtInt } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
 import { OWN_LABEL } from '../../core/rankings';
 import { EARMARK_REASONS, RANK_OWN, type CompareSearch, type EarmarkReasonFilter, type RankOwn } from '../../core/search';
@@ -76,7 +75,7 @@ export function EarmarkedExplore({ search, set, subnav }: Props) {
 
   return (
     <ViewLayout label="Explore controls" summary="Earmarked" sidebar={sidebar} subnav={subnav}>
-      <GuideSheet title="Earmarked" arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />} summary={q.data ? `${fmtInt(shown.length)} of ${fmtInt(all.length)} cards` : undefined} marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}>
+      <GuideSheet title="Earmarked" arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />} marked={{ count: marked.length, getText: () => exportLines(marked), onClear: clear }}>
         <div className="flex h-full min-h-0 flex-col">{body}</div>
       </GuideSheet>
       <CardInspector card={inspecting} onClose={() => setInspecting(null)} />

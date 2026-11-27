@@ -1,4 +1,4 @@
-import { expect, fixtures, mockApi, test } from './support';
+import { copyListFor, expect, fixtures, mockApi, test } from './support';
 
 type Page = Parameters<typeof mockApi>[0];
 
@@ -47,7 +47,6 @@ test('Jumpstart lives in Decks: Collection has no Jumpstart tab, old links open 
   await expect(list.getByRole('button', { name: /^Armed/ })).toHaveAttribute('aria-current', 'true');
   await expect(page.getByRole('heading', { level: 2, name: 'Armed' })).toBeVisible();
   await expect(page.getByText('Unused cards cover')).toBeVisible();
-  await page.getByRole('button', { name: 'List view' }).click();
   await expect(page.getByText('None unused')).toBeVisible();
   await expect(page.getByText('×8 in deck')).toBeVisible();
 });
@@ -61,17 +60,18 @@ test('one Jumpstart set in view: the Buy strip copies either shopping list', asy
     return r.fulfill({ json: { text: `${body.shop}:${body.target}`, lines: 1 } });
   });
   await page.goto('/decks?status=built,buildable,unbuilt&sets=%5B%22msh%22%5D');
-  await page.getByRole('button', { name: 'Copy ManaPool list' }).click();
+  await copyListFor(page, 'ManaPool');
   await expect(page.getByText('Copied 42 cards to build every theme · ≈ $29.25 at market for ManaPool')).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('buildable:manapool');
-  await page.getByRole('radio', { name: 'Packs I don’t own' }).click();
+  await page.getByRole('button', { name: 'Copy a list for a store' }).click();
+  await page.getByRole('menuitemradio', { name: 'Packs I don’t own' }).click();
   await expect(page).toHaveURL(/shop=packs/);
-  await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
+  await page.getByRole('menuitem', { name: /^TCGplayer/ }).click();
   expect(buys).toEqual([{ shop: 'buildable', target: 'manapool' }, { shop: 'packs', target: 'tcgplayer' }]);
-  // A set without Jumpstart packs has no Buy strip.
+  // A set without Jumpstart packs has no copy picker.
   await page.goto('/decks?status=built,buildable,unbuilt&sets=%5B%22msc%22%5D');
   await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button').first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: /Buy/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Copy a list for a store' })).toHaveCount(0);
 });
 
 test('a recipe never read reads its card list once, then shows it', async ({ page }) => {

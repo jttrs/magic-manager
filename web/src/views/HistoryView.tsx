@@ -27,7 +27,7 @@ import { STATUS_LABEL } from '../core/purchases';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { FindProductsDialog } from './history/FindProductsDialog';
 import { OrderReview } from './history/OrderReview';
-import { OrderRow, OrdersTotals } from './history/OrderRow';
+import { OrderRow } from './history/OrderRow';
 import { ReadOrdersDialog } from './history/ReadOrdersDialog';
 import { RevertImport } from './history/RevertImport';
 import { GroupHead } from '../components/GroupHead';
@@ -129,8 +129,6 @@ export function HistoryView() {
     body = narrow ? (open ? inspector : list) : <SplitPanes id="mm.history.split" label="Resize history list" list={list} inspector={inspector} defaults={[40, 60]} />;
   }
 
-  const held = useMemo(() => [...shown, ...pending].filter((e) => e.kind !== 'move').reduce((t, e) => t + e.value_usd, 0), [shown, pending]);
-  const orderTotals = purchasesOn && orders.data?.purchases.length ? orders.data.totals : null;
   return (
     <ViewLayout label="History controls" summary={filtered ? `${fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
@@ -142,17 +140,7 @@ export function HistoryView() {
             <FindProductsDialog trigger={<IconAction Icon={FindProductsMark} label="Find products in your cards" />} />
           </>
         }
-        marked={markable ? { count: markedCards.length, getText: () => exportLines(markedCards, 'plain'), onClear: clear } : undefined}
-        summary={
-          q.data
-            ? <>
-                {fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} · {fmtUsd(held)} held at today’s prices
-                {orderTotals && <> · <OrdersTotals totals={orderTotals} /></>}
-                {q.data.prices_as_of && ` · prices ${q.data.prices_as_of}`}
-                {q.data.stale_sets.length > 0 && <span title={q.data.stale_sets.join(', ').toUpperCase()}> · {fmtInt(q.data.stale_sets.length)} sets older than a week</span>}
-              </>
-            : undefined
-        }
+        marked={markable ? { count: markedCards.length, getText: () => exportLines(markedCards), onClear: clear } : undefined}
       >
         {body}
       </GuideSheet>

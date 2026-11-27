@@ -43,7 +43,8 @@ export type GuideCard = {
   missing: boolean;
   /** Short facts printed in the guide line, never over the art (e.g. Chase, Borderless). */
   tags: string[];
-  lines: { plain: string; manapool: string; tcgplayer: string };
+  /** The card as a plain-list line (`qty name`); store formats come from the server's exports engine. */
+  lines: { plain: string };
   /** Function roots the card serves (Scryfall Tagger roll-up), display labels. */
   functions?: string[];
   /** Top Scryfall Tagger oracle tags, display labels (hover preview only). */
@@ -91,7 +92,7 @@ export function fromCompare(c: CompareCardOut, fnLabels: Readonly<Record<string,
     owned: null,
     missing: false,
     tags: [],
-    lines: { plain: `1 ${c.name}`, manapool: `1 ${c.name}`, tcgplayer: `1 ${c.name}` },
+    lines: { plain: `1 ${c.name}` },
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     oracleTags: (c.oracle_tags ?? []).map((t) => t.label),
     note: null,
@@ -156,7 +157,7 @@ export function fromCollection(
     owned: c.owned as GuideCard['owned'],
     missing,
     tags: [...(c.earmarked ? [EARMARKED_TAG] : []), ...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
-    lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
+    lines: { plain: `1 ${c.name}` },
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     scene: c.scene ?? null,
     typeLine: c.type_line,
@@ -188,7 +189,7 @@ export function fromPrinting(p: PrintingOut): GuideCard {
     owned: (p.owned ?? {}) as GuideCard['owned'],
     missing: false,
     tags: treatmentLabels(p.treatment),
-    lines: { plain: `1 ${p.name}`, manapool: '', tcgplayer: '' },
+    lines: { plain: `1 ${p.name}` },
     typeLine: p.type_line ?? null,
     finishes: p.finishes,
     prices: { nonfoil: p.finishes.includes('nonfoil') ? p.price_usd : null, foil: p.finishes.includes('foil') ? p.price_usd_foil : null },
@@ -210,8 +211,8 @@ export function groupCards(cards: GuideCard[], order: readonly string[] = [], la
     .map((k) => ({ key: k, label: labels[k] ?? k, items: m.get(k)! }));
 }
 
-export function exportLines(cards: GuideCard[], target: 'plain' | 'manapool' | 'tcgplayer'): string {
-  return cards.map((c) => c.lines[target]).filter(Boolean).join('\n');
+export function exportLines(cards: GuideCard[]): string {
+  return cards.map((c) => c.lines.plain).filter(Boolean).join('\n');
 }
 
 /** The card's front image on Scryfall's CDN, derived from its id (cost lines carry no image). */
@@ -226,6 +227,6 @@ export function fromCostLine(l: DeckLineOut, basis: 'exact' | 'floor'): GuideCar
     setCode: l.set_code.toUpperCase(), cn: l.collector_number, rarity: null, finish: l.finish,
     price: basis === 'exact' ? l.unit_usd : l.floor_usd, pct: null, bars: null, group: typeGroup(null), cmc: null, colors: [],
     typeGroup: typeGroup(null), released: null, owned: null, missing: false, tags: [],
-    lines: { plain: `${l.need} ${l.name}`, manapool: '', tcgplayer: '' },
+    lines: { plain: `${l.need} ${l.name}` },
   };
 }

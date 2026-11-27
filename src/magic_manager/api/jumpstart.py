@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from .. import jumpstart, scryfall
 
-Target = Literal["manapool", "tcgplayer", "cardkingdom"]
+Target = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
 
 
 class JumpstartShopOut(BaseModel):

@@ -99,3 +99,9 @@ export const COMPARE_URL = '/explore?a=Tifa%20Lockhart&b=Cloud%2C%20Ex-SOLDIER&r
 export const COLLECTION_URL = '/collection?families=%5B%22blb%22%5D';
 /** Every printing: owned and missing (Collection shows owned only by default). */
 export const COLLECTION_ALL_URL = `${COLLECTION_URL}&show=owned%2Cmissing`;
+
+/** Opens the strip's "Copy a list for a store" picker and chooses a destination. */
+export async function copyListFor(page: Page, store: 'ManaPool' | 'TCGplayer' | 'Card Kingdom' | 'Moxfield' | 'Plain list') {
+  await page.getByRole('button', { name: 'Copy a list for a store' }).click();
+  await page.getByRole('menuitem', { name: new RegExp(`^${store}`) }).click();
+}

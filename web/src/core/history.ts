@@ -225,7 +225,7 @@ export function fromHistoryLine(l: HistoryLineOut): GuideCard {
     owned: { [l.finish]: Math.max(l.held, 0) } as GuideCard['owned'],
     missing: l.held <= 0,
     tags: [...moved, ...base.tags],
-    lines: { plain: `${Math.max(l.held, 0)} ${l.printing.name}`, manapool: '', tcgplayer: '' },
+    lines: { plain: `${Math.max(l.held, 0)} ${l.printing.name}` },
   };
 }
 

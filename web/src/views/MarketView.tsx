@@ -17,14 +17,14 @@ import { FoilGapCell, FoilPremiumFilter } from './market/FoilGap';
 import { FloorBasis } from './market/FloorBasis';
 import { useFamilyValues } from './market/useFamilyValues';
 import { Chevron } from '../components/icons/Chevron';
-import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
 import { ProgressRule } from '../components/ProgressRule';
 import { SearchSelect } from '../components/SearchSelect';
 import { Segmented, SideSection, TextField } from '../components/Sidebar';
 import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
-import { buyListTargets } from '../components/buyTargets';
+import { buyListTargets, type BuyStore } from '../components/buyTargets';
+import { CopyListMenu } from '../components/CopyListMenu';
 import { ReadTabsMark, RefreshMark, TcgplayerMark } from '../components/icons/marks';
 import { IconAction } from '../components/IconAction';
 import { MarketTabs } from './market/MarketTabs';
@@ -59,7 +59,7 @@ export function MarketView() {
   const famName = fams.data?.find((f) => f.code === search.code)?.name ?? search.code;
   const deckName = decks.data?.find((d) => d.slug === search.deck)?.name ?? search.deck;
 
-  const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
+  const buyText = (target: BuyStore) => async () => {
     const items = cost.data ? deckBuyItems(cost.data.lines, search.buyAt) : [];
     if (!items.length) return '';
     const r = await collectionBuyList({ body: { target, items } });
@@ -185,29 +185,22 @@ export function MarketView() {
           </SideSection>
         </>
       )}
-      {subject === 'deck' && search.deck && (
-        <SideSection title="Buy">
-          <Segmented<MarketSearch['buyAt']>
-            label="Printing"
-            showLabel
-            labelExtra={<InfoTip label="Which printing goes on the list?"><b>Cheapest</b> picks the cheapest nonfoil printing of each card from any set. <b>Deck’s</b> keeps the exact printing and finish in the deck list.</InfoTip>}
-            value={search.buyAt}
-            onChange={(buyAt) => set({ buyAt })}
-            options={[{ value: 'floor', label: 'Cheapest' }, { value: 'exact', label: 'Deck’s' }]}
-          />
-          <CopyTargets
-            describe={() => `${fmtCount(toBuy, 'card')} · ≈ ${fmtUsd(toBuyUsd)} at market`}
-            targets={buyListTargets(buyText, { cardKingdomNote: 'Card Kingdom takes names only; pick each printing after Find Cards' })}
-          />
-        </SideSection>
-      )}
     </>
   );
+
+  // A deck's buy list: which printings (Cheapest | Deck's), then a store format.
+  const deckBuy = subject === 'deck' && search.deck ? (
+    <CopyListMenu<MarketSearch['buyAt']>
+      describe={() => `${fmtCount(toBuy, 'card')} · ≈ ${fmtUsd(toBuyUsd)} at market`}
+      targets={buyListTargets(buyText, { exports: true, cardKingdomNote: 'Card Kingdom takes names only; pick each printing after Find Cards' })}
+      disabledReason={cost.data && toBuy === 0 ? 'Nothing to buy: you have every card in this deck' : undefined}
+      option={{ label: 'Printing', value: search.buyAt, onChange: (buyAt) => set({ buyAt }), options: [{ value: 'floor', label: 'Cheapest (any set)' }, { value: 'exact', label: 'Deck’s exact printing' }] }}
+    />
+  ) : undefined;
 
   // The title is the sheet's accessible h1 only (never printed): the strip and
   // the summary already say where you are.
   let title = 'Market';
-  let summary: ReactNode;
   let actions: ReactNode;
   let body: ReactNode;
   if (subject === 'sld') {
@@ -233,7 +226,6 @@ export function MarketView() {
     } else {
       title = famName ?? 'Market';
       body = singles ? <CardsPanel code={search.code} search={search} /> : <ProductsPanel code={search.code} q={search.q} />;
-      summary = `${famName} · ${singles ? 'each printing’s value beside the cheapest printing of the same card' : 'sealed value beside what the cards inside are worth'}`;
     }
   } else if (!search.deck) {
     body = <EmptyNote title="Choose a deck">See what it costs sealed, bought card by card, or built from your unused cards first.</EmptyNote>;
@@ -243,7 +235,6 @@ export function MarketView() {
     else if (cost.isError) body = <ErrorNote error={cost.error} onRetry={() => cost.refetch()} />;
     else {
       body = <DeckPanel d={cost.data} buyAt={search.buyAt} checkedAt={search.live ? cost.dataUpdatedAt : undefined} />;
-      summary = `${deckName} · ${fmtCount(cost.data.total_need, 'card')} · ${fmtInt(cost.data.total_need - toBuy)} from your unused cards · ${fmtInt(toBuy)} to buy`;
     }
     // A12: one recheck across every printing; afterwards the note says so with the time.
     if (!search.live) actions = <IconAction label="Recheck for cheapest" Icon={RefreshMark} disabled={cost.isPending} disabledReason="Working out the cost…" onClick={() => set({ live: true })} />;
@@ -273,7 +264,7 @@ export function MarketView() {
   const sideSummary = subject === 'family' ? famName : subject === 'sld' ? 'Secret Lair' : subject === 'deals' ? 'Deals' : deckName;
   return (
     <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} subnav={<MarketTabs subject={subject} />} startOpen={!(search.code || search.deck || search.subject === 'deals' || subject === 'sld')}>
-      <GuideSheet title={title} summary={summary} arrange={arrange} actions={actions} actionsLabel={inDeals ? 'Deals actions' : undefined}>
+      <GuideSheet title={title} arrange={arrange} buy={deckBuy} actions={actions} actionsLabel={inDeals ? 'Deals actions' : undefined}>
         {inDeals || subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>
     </ViewLayout>

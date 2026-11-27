@@ -31,7 +31,6 @@ test('surf random cards: an endless feed with filters, art tags that narrow it, 
   await expect(first).toContainText('Jane Doe');
   await expect(first).toContainText('Dragons of Tarkir · DTK #161 · Rare · 2015');
   await expect(first).toContainText('You own 2 of this printing · 3 in every printing');
-  await expect(view.getByText('120 match')).toBeVisible();
   expect(bodies[0]).toMatchObject({ with_total: true, filters: { art: [], flavor: 'any' } });
 
   // Endless: scrolling to the end draws more.

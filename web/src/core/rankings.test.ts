@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareSearch } from './search';
 import type { FactsOut, RankedOut, RankingOut } from './api';
-import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, nextPage, partialRankingNote, rankedCard, rankingPage, rankingRequest, rankingSummary, roleFor, timeframeApplies, type RankingsState } from './rankings';
+import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, nextPage, partialRankingNote, rankedCard, rankingPage, rankingRequest, roleFor, timeframeApplies, type RankingsState } from './rankings';
 
 const state = (o: Partial<RankingsState> = {}): RankingsState => ({ rank: 'commanders', tf: 'week', own: 'all', rq: '', ...o });
 const facts = (o: Partial<FactsOut> = {}): FactsOut => ({ oracle_id: 'o', type_line: 'Legendary Creature', cmc: 3, color_identity: ['R'], lowest_usd: 2, scryfall_id: 's', image_uri: null, set_code: 'm13', collector_number: '1', scryfall_url: null, owned: 0, free: 0, ...o });
@@ -95,8 +95,6 @@ describe('rankings', () => {
     expect(fetchedAgo('2026-10-05T23:00:00', now)).toBe('yesterday');
     expect(fetchedAgo('2026-10-01T12:00:00', now)).toBe('5 days ago');
     expect(fetchedAgo(null, now)).toBeNull();
-    expect(rankingSummary({ total: 2, pool: 2, owned: 1, unused: 1 })).toBe('2 ranked · you own 1 · 1 unused');
-    expect(rankingSummary({ total: 1, pool: 480, owned: 9, unused: 4 })).toBe('1 of 480 match · you own 9 · 4 unused');
   });
 
   it('splits the type line into card type and creature type', () => {

@@ -81,7 +81,6 @@ export function productType(kind: 'sealed' | 'sld' | 'single', category: string 
 
 export const BASES = ['market', 'exact', 'floor'] as const;
 export type Basis = (typeof BASES)[number];
-export const BASIS_LABEL: Record<Basis, string> = { market: 'sealed value', exact: 'cards, exact printings', floor: 'cards, cheapest printings' };
 
 export const DEAL_SORTS = ['gap_pct', 'gap_usd', 'price', 'market', 'exact', 'floor', 'name'] as const;
 export type DealSort = (typeof DEAL_SORTS)[number];

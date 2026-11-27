@@ -10,7 +10,7 @@ import { GuideSheet } from '../../../components/States';
 import { ScryfallMark, ShuffleMark } from '../../../components/icons/marks';
 import { surfDraw, type SurfDrawOut } from '../../../core/api';
 import { fmtInt } from '../../../core/format';
-import { activeFilters, decodeSurf, drawRequest, encodeSurf, EMPTY_FILTERS, feedCards, feedEnd, feedSummary, nextPage, scryfallSearchUrl, type Page, type SurfState } from '../../../core/surf';
+import { activeFilters, decodeSurf, drawRequest, encodeSurf, EMPTY_FILTERS, feedCards, feedEnd, nextPage, scryfallSearchUrl, type Page, type SurfState } from '../../../core/surf';
 import { SurfCardEntry } from './SurfCardEntry';
 import { SurfFilterRail } from './SurfFilterRail';
 
@@ -99,7 +99,6 @@ export function CardSurfer({ raw, onChange, subnav }: { raw: string | undefined;
   const addTag = (slug: string) => set({ ...state, filters: { ...state.filters, art: [...new Set([...state.filters.art, slug])] } });
   const active = activeFilters(state.filters);
 
-  const summary = feed.isPending ? 'Drawing random cards…' : feedSummary(state.source, total, cards.length, fmtInt);
   const actions = (
     <>
       <IconAction label="Shuffle — start a fresh feed" Icon={ShuffleMark} onClick={() => setSeed(newSeed())} />
@@ -115,7 +114,7 @@ export function CardSurfer({ raw, onChange, subnav }: { raw: string | undefined;
 
   return (
     <ViewLayout label="Card surfer filters" summary={active > 0 ? `${fmtInt(active)} ${active === 1 ? 'filter' : 'filters'}` : undefined} sidebar={<SurfFilterRail state={state} onChange={set} />} subnav={subnav}>
-      <GuideSheet title="Card surfer" summary={<span role="status">{summary}</span>} actions={actions} actionsLabel="Card surfer actions">
+      <GuideSheet title="Card surfer" actions={actions} actionsLabel="Card surfer actions">
         <div
           ref={scroller}
           tabIndex={0}

@@ -63,8 +63,6 @@ export function fromFacts(name: string, slug: string, f: FactsOut): GuideCard {
     tags: f.owned ? [`${f.owned} owned · ${f.free} unused`] : [],
     lines: {
       plain: names.map((n) => `1 ${n}`).join('\n'),
-      manapool: names.map((n) => `1 ${n}`).join('\n'),
-      tcgplayer: names.map((n) => `1 ${n}`).join('\n'),
     },
     typeLine: f.type_line ?? null,
     prices: f.partner ? undefined : { nonfoil: f.lowest_usd ?? null, foil: null },

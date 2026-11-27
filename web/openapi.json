@@ -11672,7 +11672,9 @@
             "enum": [
               "manapool",
               "tcgplayer",
-              "cardkingdom"
+              "cardkingdom",
+              "moxfield",
+              "plain"
             ],
             "title": "Target"
           }

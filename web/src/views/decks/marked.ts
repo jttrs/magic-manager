@@ -8,7 +8,7 @@ export function useReportMarked(sections: readonly GuideGroup[], selected: Reado
   useEffect(() => {
     if (!onMarked) return;
     const cards = sections.flatMap((g) => g.items).filter((c) => selected.has(c.key));
-    onMarked({ count: cards.length, getText: () => exportLines(cards, 'plain'), onClear: clear });
+    onMarked({ count: cards.length, getText: () => exportLines(cards), onClear: clear });
   }, [sections, selected, clear, onMarked]);
   useEffect(() => (onMarked ? () => onMarked(null) : undefined), [onMarked]);
 }

@@ -114,4 +114,5 @@ Agreed not to do now; revisit only when the reason changes.
 | Backup encryption (Litestream `age`) | Needs an off-box key escrow plan first | `docs/webapp-architecture-decision.md` §25.2 |
 | Linux / systemd deploy kit (`deploy/linux/`) | Mac mini is the only host | §26, H7 |
 | Docker vendor move | Same | §26, H7 |
+| Price-freshness cues in the web app (Secret Lair *prices from <date>* / *pricing N…*, History *N sets older than a week* and *prices <date>*, Rankings *read <ago>*) | Removed with the header strip's stats text (owner decision, Nov 2026: no stats in the strip). If staleness should be visible again, show it as an in-sheet status line only when prices are stale, not as a header count. API fields `stale_sets`, `prices_as_of`, `prices_at` are still served. | PR 2 review (strip + copy picker) |
 | Forced provider re-login before account delete | Owner kept the 10-min fresh sign-in + typed confirm (2026-11-03) | `docs/handoff/05-owner.md` |

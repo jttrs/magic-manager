@@ -2,7 +2,7 @@ import { Popover } from 'radix-ui';
 import { useState, type ComponentType, type SVGProps } from 'react';
 import { Button } from './Button';
 import { CheckMark } from './icons/marks';
-import { useCopy, type GetText } from './useCopy';
+import { copiedMessage, useCopy, type GetText } from './useCopy';
 
 /** The copy result. Always mounted (a live region must exist before it
  *  changes) but takes no space while empty, so buttons sit close together. */
@@ -21,7 +21,8 @@ export function CopyButton({ label, getText, emphasis = 'quiet', tone = 'chrome'
   );
 }
 
-export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string };
+/** A destination a list can be copied for; `format` says what the paste is ("Mass Entry"), `note` what it can't carry. */
+export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string; format?: string };
 
 /** A compact row of icon-only store marks; each copies that store's list and
  *  shows a check when done. The result appears in a small bubble anchored on
@@ -32,7 +33,7 @@ export function CopyTargets({ targets, describe }: { targets: readonly CopyTarge
   const [last, setLast] = useState<{ id: string; what: string } | null>(null);
   const click = (id: string, name: string, getText: GetText, note?: string) => {
     // Keep the target's note (e.g. what Card Kingdom's list can't carry) beside the description.
-    setLast({ id, what: describe ? `Copied ${describe()} for ${name}${note ? `. ${note}` : ''}` : '' });
+    setLast({ id, what: describe ? copiedMessage(describe(), name, note) : '' });
     void copy(id, getText, note);
   };
   return (

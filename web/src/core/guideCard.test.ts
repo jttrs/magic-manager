@@ -201,7 +201,7 @@ describe('compare + grouping', () => {
     const cards = [cmp({ name: 'B', tags: ['creatures'] }), cmp({ name: 'C', bucket: 'both' })];
     expect(bucketCards(cards).both).toHaveLength(1);
     expect(cards.filter((c) => matches(c, '', ['creatures'])).map((c) => c.name)).toEqual(['B']);
-    expect(exportLines([fromCompare(cmp({ name: 'Sol Ring' }))], 'plain')).toBe('1 Sol Ring');
+    expect(exportLines([fromCompare(cmp({ name: 'Sol Ring' }))])).toBe('1 Sol Ring');
   });
   it('groupCards keeps order', () => {
     const cs = ['Lands', 'Creatures', 'Lands'].map((group, i) => ({ ...fromCompare(cmp({})), key: String(i), group }));

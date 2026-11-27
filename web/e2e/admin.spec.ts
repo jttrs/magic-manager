@@ -43,7 +43,6 @@ test('admin: the account mark leads to people; a flag override is sent with CSRF
   await page.getByRole('button', { name: 'Signed in as The Owner' }).click();
   await page.getByRole('link', { name: 'People and features' }).click();
   await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.getByText('2 people can sign in · 1 admin')).toBeVisible();
   await page.getByRole('list', { name: 'People' }).getByRole('button', { name: /Friend/ }).click();
   const person = page.getByRole('article', { name: 'Friend' });
   await expect(person).toContainText('Signed out');

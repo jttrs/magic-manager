@@ -1,8 +1,8 @@
 import { ListRow } from '../../components/controls/ListRow';
-import type { PurchaseOut, TotalsOut } from '../../core/api';
+import type { PurchaseOut } from '../../core/api';
 import { fmtCount, fmtUsd } from '../../core/format';
 import { KIND_LABEL, orderTitle } from '../../core/history';
-import { roiSummary, signedParts, STATUS_LABEL, valuation } from '../../core/purchases';
+import { signedParts, STATUS_LABEL, valuation } from '../../core/purchases';
 
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const orderDay = (at: string) => {
@@ -25,17 +25,6 @@ export function Valued({ p, field, tone = 'paper' }: { p: Pick<PurchaseOut, 'pai
   return (
     <span title={`Today’s value of the ${fmtUsd(v.comparedPaid)} of cards with a price today. Sealed products and unpriced lines aren’t valued.`}>
       {node} <span className={`text-xs font-normal ${tone === 'chrome' ? 'text-on-chrome-muted' : 'text-ink-muted'}`}>cards</span>
-    </span>
-  );
-}
-
-/** The sheet summary's money line: paid across all orders vs. what the whole collection is worth now. */
-export function OrdersTotals({ totals }: { totals: TotalsOut }) {
-  const r = roiSummary(totals);
-  return (
-    <span title={r.title}>
-      Paid {fmtUsd(r.paid)} across {fmtCount(r.orders, 'order', 'orders')} · collection worth {fmtUsd(r.value)} now
-      {' · '}<span className={r.sign === '−' ? 'text-danger' : undefined}>{r.sign}{fmtUsd(r.gain)}</span>
     </span>
   );
 }
