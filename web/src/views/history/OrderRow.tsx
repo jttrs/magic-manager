@@ -1,7 +1,7 @@
 import { ListRow } from '../../components/controls/ListRow';
 import type { PurchaseOut } from '../../core/api';
 import { fmtCount, fmtUsd } from '../../core/format';
-import { KIND_LABEL, orderTitle } from '../../core/history';
+import { orderTitle, type KindMeta } from '../../core/history';
 import { signedParts, STATUS_LABEL, valuation } from '../../core/purchases';
 
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -29,10 +29,10 @@ export function Valued({ p, field, tone = 'paper' }: { p: Pick<PurchaseOut, 'pai
   );
 }
 
-type RowProps = { p: PurchaseOut; rowKey: string; active: boolean; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void };
+type RowProps = { p: PurchaseOut; meta: KindMeta; rowKey: string; active: boolean; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void };
 
 /** A store order in the timeline or under Needs review: store + order number, status, Paid / Worth / gain. */
-export function OrderRow({ p, rowKey, active, tabbable, onFocus, onPick }: RowProps) {
+export function OrderRow({ p, meta, rowKey, active, tabbable, onFocus, onPick }: RowProps) {
   return (
     <ListRow
       data-row={rowKey}
@@ -45,7 +45,7 @@ export function OrderRow({ p, rowKey, active, tabbable, onFocus, onPick }: RowPr
       <time dateTime={p.ordered_at} className="w-12 shrink-0 text-xs tabular text-ink-muted">{orderDay(p.ordered_at)}</time>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-md voice-semi font-medium text-ink">{orderTitle(p)}</span>
-        <span className="truncate text-xs text-ink-muted">{KIND_LABEL.purchase} · {STATUS_LABEL[p.status]} · {fmtCount(p.copies, 'copy', 'copies')}</span>
+        <span className="truncate text-xs text-ink-muted">{meta.label('purchase')} · {STATUS_LABEL[p.status]} · {fmtCount(p.copies, 'copy', 'copies')}</span>
       </span>
       <span className="grid shrink-0 grid-cols-[auto_auto] items-baseline gap-x-2 text-xs tabular">
         <span className="text-right text-ink-muted">Paid</span><span className="text-right text-ink">{fmtUsd(p.paid_usd)}</span>

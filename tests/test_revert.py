@@ -69,7 +69,7 @@ def test_happy_path_compensates_and_keeps_history(cards):
     assert (h[iid].reverted_by, h[iid].revertible, h[iid].held) == (done.revert_ingest_id, False, 0)
     assert h[before].held == 1 and h[before].revertible             # earlier copies stay with their import
     r = h[done.revert_ingest_id]
-    assert (r.kind, r.reverts, r.revertible, r.detail) == ("revert", iid, False, "Added a deck's cards · Goblins")
+    assert (r.kind, r.reverts, r.revertible, r.detail) == ("revert", iid, False, "Cards from a deck list · Goblins")
 
 
 def test_deletes_the_deck_the_import_saved(cards):

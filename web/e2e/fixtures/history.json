@@ -119,8 +119,8 @@
    "at": "2026-09-22T20:58:12+00:00",
    "method": "unattributed-backfill",
    "kind": "unknown",
-   "title": "Provenance unknown",
-   "detail": "Residual of the reconstruction \u2014 source not known",
+   "title": "Origin unknown",
+   "detail": "Residual of the reconstruction — source not known",
    "dated": "reconstructed",
    "ledgered": true,
    "copies_in": 2351,
@@ -157,7 +157,7 @@
    "at": "2026-09-17T19:55:22+00:00",
    "method": "checklist",
    "kind": "checklist",
-   "title": "Checklist \u00b7 The Hobbit",
+   "title": "Checklist · The Hobbit",
    "detail": "the-hobbit-add-checklist.xlsx",
    "dated": "acquired",
    "ledgered": false,
@@ -170,6 +170,48 @@
    "product": null,
    "set_code": "hob",
    "deck_slug": null
+  }
+ ],
+ "kinds": [
+  {
+   "kind": "deck",
+   "label": "Precon decks",
+   "help": "A product registered from its decklist that is a playable deck: a Commander or other precon, a Jumpstart pack, a Secret Lair that is a real deck — bought, or identified in your cards by Find products."
+  },
+  {
+   "kind": "pool",
+   "label": "Card pools",
+   "help": "A product with a known card list that isn't a playable deck: land packs, scene boxes, Starter Collections, small Secret Lair drops."
+  },
+  {
+   "kind": "purchase",
+   "label": "Store orders",
+   "help": "An order read from your store order history (Mana Pool, TCGplayer, Card Kingdom), with what you paid. Orders not in your collection yet wait under Needs review."
+  },
+  {
+   "kind": "checklist",
+   "label": "Checklists",
+   "help": "Counts filled in a checklist: a set sheet, the Bulk modify counts grid, or an older precon / Jumpstart sheet with no product recorded."
+  },
+  {
+   "kind": "singles",
+   "label": "Card entries",
+   "help": "Cards you listed one by one — added or removed: search, pasted lists, scans, a deck list's cards, file or Moxfield imports, census adjustments."
+  },
+  {
+   "kind": "move",
+   "label": "Built & broken down",
+   "help": "Cards pledged to a built deck or released from one. What you own does not change."
+  },
+  {
+   "kind": "revert",
+   "label": "Reverts",
+   "help": "An import you took back out with Revert this import: the copies it added were removed (and any it removed put back). The original entry stays, marked reverted."
+  },
+  {
+   "kind": "unknown",
+   "label": "Origin unknown",
+   "help": "Copies reconstructed when the ledger began, with no product or sheet they can be traced to."
   }
  ],
  "prices_as_of": "2026-10-02",

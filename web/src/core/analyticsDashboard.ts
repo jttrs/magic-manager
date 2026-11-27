@@ -14,7 +14,7 @@ export const analyticsSearch = z.object({
 export const shortRef = (rid: string | null | undefined): string => (rid ? rid.slice(0, 8) : '');
 
 const VIEW_LABEL: Record<string, string> = {
-  collection: 'Collection', history: 'Purchase history', jumpstart: 'Jumpstart', decks: 'Decks',
+  collection: 'Collection', history: 'History', jumpstart: 'Jumpstart', decks: 'Decks',
   deck_editor: 'Deck editor', explore: 'Explore', market: 'Market', jobs: 'Jobs', analytics: 'Analytics', other: 'Other',
 };
 const viewLabel = (v: string | undefined): string => (v ? VIEW_LABEL[v] ?? v : '—');

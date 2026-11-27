@@ -25,7 +25,7 @@ hosted) when the companion isn't connected; a hosted member uses only the compan
    per reader from what's granted, and the `permission.*` error codes are unchanged (their fix now
    points at Allow access).
 
-Where it shows up: Collection → Purchase history → *Read my orders* (flag `purchases`; Mana Pool,
+Where it shows up: Collection → History → *Read my orders* (flag `purchases`; Mana Pool,
 TCGplayer, Card Kingdom order history — see [`purchases.md`](purchases.md), incl. what is and isn't
 verified per store), Collection → *Check my cart* (pick Mana Pool, TCGplayer or Card Kingdom, then **Read my cart**;
 the bookmarklet paste and .env login are Mana Pool only — see *Other carts* below), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Market → Deals →

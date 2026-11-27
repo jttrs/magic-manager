@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { HistoryEntryOut, HistoryLineOut, PurchaseOut, RevertPlanOut } from './api';
+import type { HistoryEntryOut, HistoryKindOut, HistoryLineOut, PurchaseOut, RevertPlanOut } from './api';
 import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historySearch, kindCounts, mergeOrders, movesSummary, planFromError, revertActionLabel, revertBlockNote, revertLead } from './history';
 
 const e = (o: Partial<HistoryEntryOut>): HistoryEntryOut => ({
   ingest_id: 1, at: '2026-10-01T03:00:00+00:00', method: 'precon', kind: 'deck', title: 'Party Time', detail: null, dated: 'acquired',
   ledgered: true, copies_in: 10, copies_out: 0, held: 10, printings: 8, value_usd: 5, lines: 8, product: null, set_code: 'clb', deck_slug: null, ...o,
 });
+
+const KINDS: HistoryKindOut[] = [
+  { kind: 'deck', label: 'Precon decks', help: '' }, { kind: 'pool', label: 'Card pools', help: '' }, { kind: 'purchase', label: 'Store orders', help: '' },
+  { kind: 'checklist', label: 'Checklists', help: '' }, { kind: 'singles', label: 'Card entries', help: '' }, { kind: 'move', label: 'Built & broken down', help: '' },
+  { kind: 'revert', label: 'Reverts', help: '' }, { kind: 'unknown', label: 'Origin unknown', help: '' },
+];
 
 const ENTRIES = [
   e({ ingest_id: 6, kind: 'move', method: 'deck-assign', title: 'Built A', held: 0, value_usd: 0 }),
@@ -36,8 +42,8 @@ describe('history view-model', () => {
     expect([g[0].copiesIn, g[0].valueUsd, g[1].valueUsd]).toEqual([10, 5, 2.5]);
   });
 
-  it('counts kinds in canonical order and parses URL state', () => {
-    expect(kindCounts(ENTRIES).map((k) => [k.value, k.count])).toEqual([['deck', 1], ['pool', 1], ['checklist', 1], ['move', 3]]);
+  it('counts kinds in the server order (moves = days) and parses URL state', () => {
+    expect(kindCounts(ENTRIES, 0, KINDS).map((k) => [k.value, k.count])).toEqual([['deck', 1], ['pool', 1], ['checklist', 1], ['move', 2]]);
     expect(historySearch.parse({ entry: '540', kinds: 'pool', from: 'nope' })).toMatchObject({ entry: 540, kinds: ['pool'], from: undefined, view: 'list' });
     expect(datedNote({ dated: 'identified' })).toMatch(/not the purchase date/);
     expect(datedNote({ dated: 'acquired' })).toBeNull();
@@ -81,7 +87,7 @@ describe('store orders in the timeline', () => {
     expect([sep.copiesIn, sep.valueUsd]).toEqual([40, 7.5]);
     expect(m.orderOf.get(20)?.purchase_id).toBe(2);
     expect(m.orders.map((p) => p.purchase_id)).toEqual([5]);
-    expect(kindCounts(m.entries, m.review.length + m.orders.length).find((k) => k.value === 'purchase')).toMatchObject({ label: 'Store order', count: 4 });
+    expect(kindCounts(m.entries, m.review.length + m.orders.length, KINDS).find((k) => k.value === 'purchase')).toMatchObject({ label: 'Store orders', count: 4 });
     expect(mergeOrders(entries).entries).toHaveLength(entries.length);
   });
 

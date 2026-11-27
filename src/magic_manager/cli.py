@@ -578,7 +578,7 @@ app.add_typer(ingest_app, name="ingest")
 
 @ingest_app.command("revert")
 def ingest_revert(
-    ingest_id: int = typer.Argument(..., help="The ingest event to revert (see Purchase history / mm audit provenance)."),
+    ingest_id: int = typer.Argument(..., help="The ingest event to revert (see History / mm audit provenance)."),
     apply: bool = typer.Option(False, "--apply", help="Write the revert. Default: dry run — print the plan only."),
 ):
     """Revert one import: append a compensating event that removes exactly the copies it

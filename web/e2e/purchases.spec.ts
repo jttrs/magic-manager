@@ -1,4 +1,4 @@
-// Store orders (purchases flag), merged into Purchase history: Needs review, totals, reading orders through the
+// Store orders (purchases flag), merged into History: Needs review, totals, reading orders through the
 // companion (stood in for here), and adding an order's singles to your collection.
 import type { Page } from '@playwright/test';
 import history from './fixtures/history.json' with { type: 'json' };
@@ -76,14 +76,14 @@ async function fakeCompanion(page: Page, answers: Record<string, unknown>) {
   }, answers);
 }
 
-test('one Purchase history: undecided orders pinned under Needs review, totals in the summary, no Store orders tab', async ({ page }) => {
+test('one History: undecided orders pinned under Needs review, totals in the summary, no Store orders tab', async ({ page }) => {
   await flags(page, { purchases: true });
   await purchasesApi(page);
   await page.goto('/collection/history');
   const tabs = page.getByRole('navigation', { name: 'Collection views' });
-  await expect(tabs.getByRole('link')).toHaveText(['Cards', 'Purchase history']);
+  await expect(tabs.getByRole('link')).toHaveText(['Cards', 'History']);
   await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toBeVisible();
-  const list = page.getByRole('navigation', { name: 'Purchase history' });
+  const list = page.getByRole('navigation', { name: 'History' });
   await expect(list.getByRole('heading', { level: 2 }).first()).toContainText('Needs review');
   const review = list.getByRole('region', { name: /Needs review/ });
   const row = review.getByRole('button', { name: /Mana Pool order #MP-111/ });
@@ -169,11 +169,11 @@ test('an applied order shows once: its ledger entry carries the order, and Revie
   await page.route('**/api/history', (r) => r.fulfill({ json: { ...history, entries: [entry, ...history.entries] } }));
   await page.route('**/api/history/9', (r) => r.fulfill({ json: { entry, lines: [] } }));
   await page.goto('/collection/history');
-  const list = page.getByRole('navigation', { name: 'Purchase history' });
+  const list = page.getByRole('navigation', { name: 'History' });
   await expect(list.getByRole('region', { name: /Needs review/ })).toHaveCount(0);
   const rows = list.getByRole('button', { name: /MP-111/ });
   await expect(rows).toHaveCount(1);
-  await expect(rows).toContainText('Store order · In your collection');
+  await expect(rows).toContainText('Store orders · In your collection');
   await rows.click();
   await page.getByRole('button', { name: 'Review order' }).click();
   await expect(page).toHaveURL(/order=1/);

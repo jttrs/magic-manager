@@ -171,7 +171,7 @@ Do it when nobody is using the app. The laptop's real DB is only *read*.
    starts Litestream, waits until `mm host verify-replica` restores every file equal to live,
    uploads the first catalog snapshot, starts the app, auto-deploy and the weekly backup.
 7. **Record your id** for upgrades: `deploy/macos/install.sh --origin https://… --owner-id <id> --apply`.
-8. **Verify:** open the app — your decks and purchase history are there; `mmctl status` shows
+8. **Verify:** open the app — your decks and collection history are there; `mmctl status` shows
    four agents; `tail ~/Library/Logs/magic-manager-hosted/litestream.log`.
 9. **Laptop from now on:** leave `com.magic-manager.serve` stopped (or re-point it at a pulled
    copy) — the mini is the source of truth.

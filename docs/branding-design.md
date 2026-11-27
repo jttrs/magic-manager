@@ -201,7 +201,7 @@ Original geometry and a coined name are not substitutes for legal clearance.
 ## 6. Subtle application branding
 
 Keep the operational interface literal. Collection, Decks, Explore, Market,
-Purchase history, and Background jobs should not become Reservoir, Assembly,
+History, and Background jobs should not become Reservoir, Assembly,
 Retriever, or other lore terms.
 
 | Surface | Proposed treatment | Boundary |

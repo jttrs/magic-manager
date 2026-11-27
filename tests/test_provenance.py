@@ -57,7 +57,7 @@ def test_a_removal_only_draws_on_copies_acquired_before_it(seed_cards, make_card
     inventory.inventory_remove(A, "nonfoil", 1)          # the precon copy leaves…
     inventory.inventory_add(A, "nonfoil", 1)             # …and a single is bought later
     held = {e.title: e.held for e in provenance.history().entries if e.held}
-    assert held == {"Added by hand": 1}                  # purchase history agrees
+    assert held == {"Added by hand": 1}                  # History agrees
 
 
 def test_holdings_per_finish_pledges_and_other_printings(seed_cards, make_card):

@@ -4,7 +4,7 @@ import { COLLECTION_URL, expect, fixtures, test } from './support';
 // scrolls and never rubber-bands; only the panes that overflow scroll.
 const VIEWS = [
   ['Collection', COLLECTION_URL],
-  ['Purchase history', '/collection/history'],
+  ['History', '/collection/history'],
   ['Decks', '/decks'],
   ['Deck editor', `/decks/${encodeURIComponent(fixtures.deckDetail.deck.slug)}/edit`],
   ['Explore rankings', '/explore?mode=rankings'],

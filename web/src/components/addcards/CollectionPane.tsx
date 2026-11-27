@@ -74,7 +74,7 @@ export function CollectionPane({ companion }: { companion: boolean }) {
           <span className="highlighter px-1 voice-semi font-medium">
             Imported: {fmtInt(done.out.added)} new {done.out.added === 1 ? 'printing' : 'printings'}, {fmtInt(done.out.updated)} changed
           </span>
-          <span className="text-sm text-ink-muted">One entry in Purchase history · {done.title}</span>
+          <span className="text-sm text-ink-muted">One entry in History · {done.title}</span>
         </p>
       )}
       <p className="max-w-measure-body text-md leading-relaxed text-ink-muted">

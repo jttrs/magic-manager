@@ -15,7 +15,7 @@ net-zero, so balances stay exact). Each event classifies into a *source*:
 * **unknown** — the generic best-effort buckets (``backfill:precon``,
   ``unattributed-backfill``, ``migration-backfill``).
 
-A later removal is its own (negative) event; purchase history nets it with an
+A later removal is its own (negative) event; History nets it with an
 in-order ledger walk (``_held``), so what the events hold sums to what is owned.
 """
 from __future__ import annotations
@@ -145,7 +145,7 @@ def card_holdings(scryfall_id: str) -> Holdings:
     return h
 
 
-# ---------- purchase history: one entry per ingest event ----------
+# ---------- History: one entry per ingest event ----------
 #
 # The acquisition timeline read straight off the ledger. Each ``ingest_events``
 # row is one entry; its ``inventory_events`` give copies in / out and the balance
@@ -160,11 +160,42 @@ def card_holdings(scryfall_id: str) -> Holdings:
 
 HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase", "revert"]
 
+# THE kinds of History entry, in display order, with their one name and one help line —
+# the filter options, the row sub-labels and the detail ⓘ all read these (the web takes
+# them from GET /api/history). Each entry has exactly one kind (`_describe`), so the
+# kinds never overlap; every label names where the record came from.
+KIND_META: tuple[tuple[HistoryKind, str, str], ...] = (
+    ("deck", "Precon decks",
+     "A product registered from its decklist that is a playable deck: a Commander or other precon, a Jumpstart pack, "
+     "a Secret Lair that is a real deck — bought, or identified in your cards by Find products."),
+    ("pool", "Card pools",
+     "A product with a known card list that isn't a playable deck: land packs, scene boxes, Starter Collections, "
+     "small Secret Lair drops."),
+    ("purchase", "Store orders",
+     "An order read from your store order history (Mana Pool, TCGplayer, Card Kingdom), with what you paid. "
+     "Orders not in your collection yet wait under Needs review."),
+    ("checklist", "Checklists",
+     "Counts filled in a checklist: a set sheet, the Bulk modify counts grid, or an older precon / Jumpstart sheet "
+     "with no product recorded."),
+    ("singles", "Card entries",
+     "Cards you listed one by one — added or removed: search, pasted lists, scans, a deck list's cards, "
+     "file or Moxfield imports, census adjustments."),
+    ("move", "Built & broken down",
+     "Cards pledged to a built deck or released from one. What you own does not change."),
+    ("revert", "Reverts",
+     "An import you took back out with Revert this import: the copies it added were removed "
+     "(and any it removed put back). The original entry stays, marked reverted."),
+    ("unknown", "Origin unknown",
+     "Copies reconstructed when the ledger began, with no product or sheet they can be traced to."),
+)
+
 _SINGLES_TITLES = {
     "adhoc": "Added by hand", "intake": "Scan session", "import-block": "Imported list",
     "collection-import": "Collection import", "collection-export": "Collection export",
 }
-_WEB_TITLES = {"search": "Added from search", "paste": "Pasted list", "deck": "Added a deck's cards"}
+_WEB_TITLES = {"search": "Added from search", "paste": "Pasted list", "deck": "Cards from a deck list"}
+# A card entry that only took copies OUT reads as a removal (set once its copies are counted).
+_REMOVAL_TITLES = {"Added by hand": "Removed by hand", "Added from search": "Removed by hand", "Added cards": "Removed cards"}
 _UNKNOWN_DETAIL = {
     "backfill:precon": "Reconstructed from precon decklists — which product is not known",
     "backfill:unattributed": "Residual of the reconstruction — source not known",
@@ -252,7 +283,7 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
         h.kind, h.title, h.detail = "purchase", src.label, None
         return h
     if src.kind == "unknown":
-        h.kind, h.title = "unknown", "Provenance unknown"
+        h.kind, h.title = "unknown", "Origin unknown"
         h.detail = _UNKNOWN_DETAIL.get(label, label or None)
         return h
     if src.key.startswith("product:"):
@@ -275,7 +306,7 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
         elif kind == "jumpstart" and code:
             h.title, h.set_code = f"Jumpstart packs · {_set_label(code, set_names)}", code.lower()
         elif kind == "precon":
-            h.title = "Precon checklist"
+            h.title = "Product checklist"
         else:
             h.title = "Checklist"
         h.detail = base or path or (label or None)
@@ -418,6 +449,10 @@ def _fill(h: HistoryEntry, rows, held: dict[tuple[int, str, str], int], prices: 
             h.printings += 1
             h.value_usd += n * (_unit_usd(prices.get(sid), fin) or 0.0)
     h.value_usd = round(h.value_usd, 2)
+    if h.kind == "singles" and h.copies_out and not h.copies_in:
+        h.title = "Census removal" if (h.detail or "").startswith("census:") else _REMOVAL_TITLES.get(h.title, h.title)
+    elif h.kind == "singles" and (h.detail or "").startswith("census:"):
+        h.title = "Census addition"
 
 
 def _as_of(prices: dict[str, dict]) -> str | None:

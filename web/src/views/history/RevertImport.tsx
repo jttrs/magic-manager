@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { revertPlanQuery, unwrap } from '../../app/queries';
-import { Button } from '../../components/Button';
+import { IconAction } from '../../components/IconAction';
+import { UndoMark } from '../../components/icons/marks';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { historyRevert, type RevertPlanOut } from '../../core/api';
 import { ApiError } from '../../core/apiError';
@@ -20,7 +21,7 @@ export function RevertImport({ ingestId, onDone }: { ingestId: number; onDone: (
 
   return (
     <>
-      <Button tone="paper" onClick={() => { setRefused(null); setOpen(true); }}>Revert this import</Button>
+      <IconAction label="Revert this import" Icon={UndoMark} onClick={() => { setRefused(null); setOpen(true); }} />
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

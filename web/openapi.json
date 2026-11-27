@@ -11143,6 +11143,41 @@
         ],
         "title": "HistoryEventOut"
       },
+      "HistoryKindOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "deck",
+              "pool",
+              "singles",
+              "checklist",
+              "unknown",
+              "move",
+              "purchase",
+              "revert"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "The kind's one name: filter option, row sub-label, detail header."
+          },
+          "help": {
+            "type": "string",
+            "title": "Help",
+            "description": "One line saying what the kind covers (the \u24d8)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "help"
+        ],
+        "title": "HistoryKindOut"
+      },
       "HistoryLineOut": {
         "properties": {
           "printing": {
@@ -11200,6 +11235,14 @@
             "type": "array",
             "title": "Entries"
           },
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryKindOut"
+            },
+            "type": "array",
+            "title": "Kinds",
+            "description": "Every kind in display order (provenance.KIND_META)."
+          },
           "prices_as_of": {
             "anyOf": [
               {
@@ -11224,6 +11267,7 @@
         "type": "object",
         "required": [
           "entries",
+          "kinds",
           "prices_as_of",
           "stale_sets"
         ],

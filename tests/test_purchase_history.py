@@ -67,7 +67,7 @@ def test_entries_classify_title_and_value(seeded):
     assert (e.kind, e.title, e.dated, e.deck_slug, e.held) == ("pool", "Camp Comrades", "identified", None, 2)
     e = got[unknown]
     assert (e.kind, e.title, e.dated, e.copies_in, e.copies_out, e.held, e.value_usd) == (
-        "unknown", "Provenance unknown", "reconstructed", 2, 2, 0, 0.0)
+        "unknown", "Origin unknown", "reconstructed", 2, 2, 0, 0.0)
     e = got[recon]
     assert (e.kind, e.title, e.held, e.value_usd) == ("checklist", "Checklists before the ledger", 4, 6.0)
     e = got[legacy]
@@ -132,3 +132,27 @@ def test_checklist_path_is_not_a_product():
     assert provenance._classify("precon", "jumpstart:fin", path, {}).key == "singles"
     bare = provenance._classify("precon", None, "Goblins_FIN", {})
     assert bare.key == "product:Goblins_FIN"
+
+
+def test_kind_meta_names_every_kind_once():
+    from typing import get_args
+    from magic_manager import provenance
+    kinds = [k for k, _label, _help in provenance.KIND_META]
+    assert sorted(kinds) == sorted(get_args(provenance.HistoryKind))
+    labels = [label for _k, label, _help in provenance.KIND_META]
+    assert len(set(labels)) == len(labels)
+
+
+def test_a_card_entry_that_only_removed_reads_as_a_removal():
+    from magic_manager import provenance
+    removal = provenance.HistoryEntry(ingest_id=1, at="2026-10-31", method="adhoc", kind="singles", title="Added by hand")
+    provenance._fill(removal, [(1, "a", "nonfoil", 0, 3, 0)], {}, {})
+    assert removal.title == "Removed by hand"
+    census = provenance.HistoryEntry(ingest_id=2, at="2026-10-31", method="adhoc", kind="singles", title="Added by hand",
+                                     detail="census:fin over-count removal")
+    provenance._fill(census, [(2, "a", "nonfoil", 0, 5, 0)], {}, {})
+    assert census.title == "Census removal"
+    added = provenance.HistoryEntry(ingest_id=3, at="2026-10-31", method="adhoc", kind="singles", title="Added by hand",
+                                    detail="census:fin loose cards")
+    provenance._fill(added, [(3, "a", "nonfoil", 2, 0, 2)], {}, {})
+    assert added.title == "Census addition"
