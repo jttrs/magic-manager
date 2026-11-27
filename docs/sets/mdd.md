@@ -9,6 +9,7 @@
 **Family root type:** `expansion` (Universes Beyond Marvel set, own null-parent root)
 **Family released:** 2027-04-09 (**UNRELEASED** at audit time — preview season)
 **Last audit:** 2026-11-01 via `/characterize-set mdd` (steps 1-8, non-interactive batch run).
+**Re-checked:** 2026-11-27 — unchanged (still 12 `mdd` + 1 `mdc` + 6 `tmdd` printings; no new codes).
 
 > ⚠️ **Preview-season snapshot.** Scryfall lists only **19 printings** across the
 > family (12 `mdd` + 1 `mdc` + 6 `tmdd`) — early spoilers, not the set. Every
