@@ -3,13 +3,13 @@ import { useState } from 'react';
 import type { CopyTarget } from './CopyButton';
 import { IconTooltip } from './IconTooltip';
 import { iconActionClass } from './iconActionClass';
-import { menuItemClass, menuLabelClass, menuPanelClass } from './controls/surfaces';
+import { menuItemClass, menuLabelClass, menuPanelClass, menuSeparatorClass } from './controls/surfaces';
 import { markBadge } from '../core/marks';
 import { BuyListMark, CheckMark, CloseMark } from './icons/marks';
-import { useCopy } from './useCopy';
+import { copiedMessage, useCopy } from './useCopy';
 
 /** A choice that changes WHAT gets copied (e.g. Cheapest vs Deck's printings). */
-export type CopyListOption<T extends string> = { label: string; value: T; options: readonly { value: T; label: string }[]; onChange: (v: T) => void };
+export type CopyListOption<T extends string> = { label: string; value: T; options: readonly { value: T; label: string }[]; onChange: (v: T) => void; /** One line saying what the choice changes. */ hint?: string };
 
 /** ONE icon in the strip's Buy group that copies a bulk list for a store: a menu
  *  headed by what will be copied (`describe`, e.g. "12 marked cards" or "140 missing
@@ -27,20 +27,24 @@ export function CopyListMenu<T extends string>({ targets, describe, option, disa
 }) {
   const { status, failed, busy, copy } = useCopy();
   const [bubble, setBubble] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const label = 'Copy a list for a store';
+  // Disabled = aria-disabled, never the native attribute: the trigger keeps focus and its
+  // tooltip says why (like IconAction), and the menu simply won't open.
+  const blocked = !!disabledReason || busy != null;
   const pick = (t: CopyTarget) => {
-    const what = describe();
-    setBubble(`Copied ${what} for ${t.name}${t.note ? `. ${t.note}` : ''}`);
+    setOpen(false); // close first: the copy marks the picker busy, which must not leave the menu half-open
+    setBubble(copiedMessage(describe(), t.name, t.note));
     void copy(t.id, t.getText, t.note);
   };
   const text = !failed && bubble ? bubble : status;
   return (
     <Popover.Root open={!!status && busy == null} onOpenChange={(o) => !o && setBubble(null)}>
-      <DropdownMenu.Root>
+      <DropdownMenu.Root open={open && !blocked} onOpenChange={(o) => setOpen(o && !blocked)}>
         <Popover.Anchor asChild>
           <span className="inline-flex">
             <IconTooltip label={disabledReason ?? (busy ? 'Building the list…' : label)}>
-              <DropdownMenu.Trigger aria-label={label} aria-disabled={disabledReason ? true : undefined} disabled={!!disabledReason || busy != null} className={iconActionClass('paper')}>
+              <DropdownMenu.Trigger aria-label={label} aria-disabled={blocked || undefined} aria-description={disabledReason} className={iconActionClass('paper')}>
                 {status && !failed ? <CheckMark className="size-icon-md" /> : <BuyListMark className={`size-icon-md ${busy ? 'animate-pulse' : ''}`} />}
                 {marked && marked.count > 0 && (
                   <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-pill bg-accent px-1 text-2xs font-bold leading-none tabular text-on-accent">{markBadge(marked.count)}</span>
@@ -54,8 +58,9 @@ export function CopyListMenu<T extends string>({ targets, describe, option, disa
             <DropdownMenu.Label className={menuLabelClass}>Copy {describe()}</DropdownMenu.Label>
             {option && (
               <>
-                <DropdownMenu.Separator className="my-1 h-px bg-chrome-line" />
+                <DropdownMenu.Separator className={menuSeparatorClass} />
                 <DropdownMenu.Label className={menuLabelClass}>{option.label}</DropdownMenu.Label>
+                {option.hint && <p className="px-3 pb-1 text-xs leading-snug text-on-chrome-muted">{option.hint}</p>}
                 <DropdownMenu.RadioGroup value={option.value} onValueChange={(v) => option.onChange(v as T)}>
                   {option.options.map((o) => (
                     <DropdownMenu.RadioItem key={o.value} value={o.value} onSelect={(e) => e.preventDefault()} className={menuItemClass}>
@@ -66,7 +71,7 @@ export function CopyListMenu<T extends string>({ targets, describe, option, disa
                 </DropdownMenu.RadioGroup>
               </>
             )}
-            <DropdownMenu.Separator className="my-1 h-px bg-chrome-line" />
+            <DropdownMenu.Separator className={menuSeparatorClass} />
             <DropdownMenu.Label className={menuLabelClass}>Copy for</DropdownMenu.Label>
             {targets.map((t) => (
               <DropdownMenu.Item key={t.id} onSelect={() => pick(t)} className={menuItemClass}>
@@ -79,7 +84,7 @@ export function CopyListMenu<T extends string>({ targets, describe, option, disa
             ))}
             {marked && marked.count > 0 && (
               <>
-                <DropdownMenu.Separator className="my-1 h-px bg-chrome-line" />
+                <DropdownMenu.Separator className={menuSeparatorClass} />
                 <DropdownMenu.Item onSelect={marked.onClear} className={menuItemClass}>
                   <CloseMark className="size-icon-sm shrink-0 text-on-chrome-muted" />
                   Clear {marked.count === 1 ? 'the mark' : `all ${marked.count} marks`}

@@ -114,7 +114,7 @@ export function ViewLayout({ sidebar, children, label, summary, startOpen = fals
         <div className="w-full max-w-full empty:hidden lg:w-auto">
           <SubnavSlot.Provider value>{subnav}</SubnavSlot.Provider>
         </div>
-        <div className="ml-auto flex items-stretch">
+        <div className="ml-auto flex max-w-full flex-wrap items-stretch justify-end">
           <div ref={setArrange} data-slot="" className={group} />
           <div ref={setBuy} data-slot="" className={group} />
           <div ref={setActions} data-slot="" className={group} />

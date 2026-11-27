@@ -210,7 +210,7 @@ export function ExploreView() {
             )}
           </>
         }
-        marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}
+        marked={{ count: marked.length, getText: () => exportLines(marked), onClear: clear }}
       >
         <div className="flex h-full min-h-0 flex-col">
           {role === 'commander' && search.groupBy === 'function' && cmdView && (

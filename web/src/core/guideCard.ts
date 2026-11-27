@@ -211,8 +211,8 @@ export function groupCards(cards: GuideCard[], order: readonly string[] = [], la
     .map((k) => ({ key: k, label: labels[k] ?? k, items: m.get(k)! }));
 }
 
-export function exportLines(cards: GuideCard[], target: 'plain'): string {
-  return cards.map((c) => c.lines[target]).filter(Boolean).join('\n');
+export function exportLines(cards: GuideCard[]): string {
+  return cards.map((c) => c.lines.plain).filter(Boolean).join('\n');
 }
 
 /** The card's front image on Scryfall's CDN, derived from its id (cost lines carry no image). */

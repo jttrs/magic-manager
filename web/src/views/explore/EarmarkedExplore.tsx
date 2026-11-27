@@ -75,7 +75,7 @@ export function EarmarkedExplore({ search, set, subnav }: Props) {
 
   return (
     <ViewLayout label="Explore controls" summary="Earmarked" sidebar={sidebar} subnav={subnav}>
-      <GuideSheet title="Earmarked" arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />} marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}>
+      <GuideSheet title="Earmarked" arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />} marked={{ count: marked.length, getText: () => exportLines(marked), onClear: clear }}>
         <div className="flex h-full min-h-0 flex-col">{body}</div>
       </GuideSheet>
       <CardInspector card={inspecting} onClose={() => setInspecting(null)} />

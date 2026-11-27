@@ -212,7 +212,7 @@ function JumpstartBuy({ code, shop, onShop }: { code: string; shop: Shop; onShop
       describe={() => (q.data ? shopDescribe(shop, q.data) : 'the shopping list')}
       targets={buyListTargets(buyText, { exports: true })}
       disabledReason={why}
-      option={{ label: 'Shop for', value: shop, onChange: onShop, options: [{ value: 'buildable', label: 'Every theme' }, { value: 'packs', label: 'Packs I don’t own' }] }}
+      option={{ label: 'Shop for', value: shop, onChange: onShop, hint: 'Every theme: the cards you’re missing to keep one built copy of every theme, plus each theme’s other-version cards. Packs I don’t own: each pack version you have no copy of, card for card.', options: [{ value: 'buildable', label: 'Every theme' }, { value: 'packs', label: 'Packs I don’t own' }] }}
     />
   );
 }

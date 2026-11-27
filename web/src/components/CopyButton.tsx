@@ -2,7 +2,7 @@ import { Popover } from 'radix-ui';
 import { useState, type ComponentType, type SVGProps } from 'react';
 import { Button } from './Button';
 import { CheckMark } from './icons/marks';
-import { useCopy, type GetText } from './useCopy';
+import { copiedMessage, useCopy, type GetText } from './useCopy';
 
 /** The copy result. Always mounted (a live region must exist before it
  *  changes) but takes no space while empty, so buttons sit close together. */
@@ -33,7 +33,7 @@ export function CopyTargets({ targets, describe }: { targets: readonly CopyTarge
   const [last, setLast] = useState<{ id: string; what: string } | null>(null);
   const click = (id: string, name: string, getText: GetText, note?: string) => {
     // Keep the target's note (e.g. what Card Kingdom's list can't carry) beside the description.
-    setLast({ id, what: describe ? `Copied ${describe()} for ${name}${note ? `. ${note}` : ''}` : '' });
+    setLast({ id, what: describe ? copiedMessage(describe(), name, note) : '' });
     void copy(id, getText, note);
   };
   return (

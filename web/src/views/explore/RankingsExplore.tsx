@@ -198,7 +198,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
         arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />}
         title={r?.title ?? SCOPE_LABEL[search.rank]}
         actionsLabel="Ranking actions"
-        marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}
+        marked={{ count: marked.length, getText: () => exportLines(marked), onClear: clear }}
         actions={
           r && (
             <>

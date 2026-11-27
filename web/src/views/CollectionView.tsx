@@ -310,7 +310,14 @@ export function CollectionView() {
           </>
         }
       >
-        {body}
+        <div className="flex h-full min-h-0 flex-col">
+          {q.data?.skipped?.length ? (
+            <p role="status" className="mx-sheet py-2 text-sm text-ink-muted">
+              Couldn’t find a set family for {q.data.skipped.map((c) => c.toUpperCase()).join(', ')}: left out.
+            </p>
+          ) : null}
+          <div className="min-h-0 flex-1">{body}</div>
+        </div>
       </GuideSheet>
       <ChecklistLeaveGuard checklist={checklist} />
     </ViewLayout>

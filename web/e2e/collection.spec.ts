@@ -209,8 +209,32 @@ test('“Missing means” is a Settings preference, not a rail filter, and it st
   await (await means()).getByRole('radio', { name: 'The card' }).click();
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/gaps/);
+  // The choice changes what Missing means: the rail's explanation now says "no printing".
+  await page.getByRole('button', { name: 'What does missing mean?' }).focus();
+  await expect(page.getByRole('tooltip')).toContainText('cards you own in no printing');
   await page.reload();
   await expect((await means()).getByRole('radio', { name: 'The card' })).toBeChecked();
+});
+
+test('the copy picker: marked count badge, clear the marks, and a disabled picker says why', async ({ page }) => {
+  await page.goto(COLLECTION_URL); // owned cards only: nothing to buy
+  const picker = page.getByRole('button', { name: 'Copy a list for a store' });
+  await expect(picker).toHaveAttribute('aria-disabled', 'true');
+  await expect(picker).toHaveAttribute('aria-description', /Nothing to buy/);
+  await picker.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
+  const marks = page.getByRole('button', { name: /^Mark / });
+  await marks.nth(0).click();
+  await marks.nth(0).click(); // the first mark became Unmark, so nth(0) is the next card
+  await expect(picker).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(picker).toContainText('2');
+  await picker.click();
+  await expect(page.getByRole('menu')).toContainText('Copy 2 marked cards');
+  await page.getByRole('menuitem', { name: 'Clear all 2 marks' }).click();
+  await expect(page.getByRole('button', { name: /^Unmark / })).toHaveCount(0);
+  await expect(picker).toHaveAttribute('aria-disabled', 'true');
 });
 
 test('earmarked cards carry a mark, and a filter shows only them', async ({ page }) => {

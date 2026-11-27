@@ -140,7 +140,7 @@ export function HistoryView() {
             <FindProductsDialog trigger={<IconAction Icon={FindProductsMark} label="Find products in your cards" />} />
           </>
         }
-        marked={markable ? { count: markedCards.length, getText: () => exportLines(markedCards, 'plain'), onClear: clear } : undefined}
+        marked={markable ? { count: markedCards.length, getText: () => exportLines(markedCards), onClear: clear } : undefined}
       >
         {body}
       </GuideSheet>
