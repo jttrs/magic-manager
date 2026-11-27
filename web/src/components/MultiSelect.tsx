@@ -27,6 +27,8 @@ type Props = {
   keepOrder?: boolean;
   /** Rendered after the label (e.g. an InfoTip). */
   labelExtra?: ReactNode;
+  /** Options are still loading: the trigger reads "Loading…" and stays shut. */
+  loading?: boolean;
 };
 
 /**
@@ -34,7 +36,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', searchable = true, keepOrder = false, labelExtra }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', searchable = true, keepOrder = false, labelExtra, loading = false }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -63,9 +65,11 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
       <Popover.Root onOpenChange={(o) => !o && setQ('')}>
         <Popover.Trigger
           aria-labelledby={`${id}-l ${id}-s`}
+          aria-busy={loading || undefined}
+          disabled={loading}
           className={triggerClass('chrome')}
         >
-          <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${unfiltered ? 'text-on-chrome-muted' : ''}`}>{summary}</span>
+          <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${unfiltered || loading ? 'text-on-chrome-muted' : ''}`}>{loading ? 'Loading…' : summary}</span>
           <CaretMark className="size-icon-sm shrink-0 text-on-chrome-muted" />
         </Popover.Trigger>
         <Popover.Portal>
