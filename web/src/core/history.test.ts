@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryEntryOut, HistoryKindOut, HistoryLineOut, PurchaseOut, RevertPlanOut } from './api';
-import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historySearch, kindCounts, mergeOrders, movesSummary, planFromError, revertActionLabel, revertBlockNote, revertLead } from './history';
+import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historySearch, kindCounts, mergeOrders, timelineRowCount, movesSummary, planFromError, revertActionLabel, revertBlockNote, revertLead } from './history';
 
 const e = (o: Partial<HistoryEntryOut>): HistoryEntryOut => ({
   ingest_id: 1, at: '2026-10-01T03:00:00+00:00', method: 'precon', kind: 'deck', title: 'Party Time', detail: null, dated: 'acquired',
@@ -44,6 +44,9 @@ describe('history view-model', () => {
 
   it('counts kinds in the server order (moves = days) and parses URL state', () => {
     expect(kindCounts(ENTRIES, 0, KINDS).map((k) => [k.value, k.count])).toEqual([['deck', 1], ['pool', 1], ['checklist', 1], ['move', 2]]);
+    // The filter's move count and the list's rows agree; an older payload without kinds still lists every kind.
+    expect(timelineRowCount(ENTRIES)).toBe(5);
+    expect(kindCounts(ENTRIES, 0, []).map((k) => k.value)).toEqual(['deck', 'pool', 'checklist', 'move']);
     expect(historySearch.parse({ entry: '540', kinds: 'pool', from: 'nope' })).toMatchObject({ entry: 540, kinds: ['pool'], from: undefined, view: 'list' });
     expect(datedNote({ dated: 'identified' })).toMatch(/not the purchase date/);
     expect(datedNote({ dated: 'acquired' })).toBeNull();

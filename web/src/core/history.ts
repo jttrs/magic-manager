@@ -64,7 +64,15 @@ export function kindCounts(entries: readonly HistoryEntryOut[], orders: number, 
   if (moveDays.size) n.set('move', moveDays.size);
   if (orders) n.set('purchase', (n.get('purchase') ?? 0) + orders);
   const meta = kindMeta(kinds);
-  return kinds.filter((k) => n.has(k.kind)).map((k) => ({ value: k.kind, label: meta.label(k.kind), count: n.get(k.kind)! }));
+  // The server's order; an older payload without kinds still lists (and can clear) every kind.
+  const order: readonly HistoryKind[] = kinds.length ? kinds.map((k) => k.kind) : KINDS;
+  return order.filter((k) => n.has(k)).map((k) => ({ value: k, label: meta.label(k), count: n.get(k)! }));
+}
+
+/** How many rows the timeline shows for these entries: one per entry, but a day's moves fold into one row. */
+export function timelineRowCount(entries: readonly HistoryEntryOut[]): number {
+  const moveDays = new Set(entries.filter((e) => e.kind === 'move').map((e) => day(e.at)));
+  return entries.filter((e) => e.kind !== 'move').length + moveDays.size;
 }
 
 // ---------- store orders, merged into the timeline ----------

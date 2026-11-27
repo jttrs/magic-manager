@@ -194,8 +194,18 @@ _SINGLES_TITLES = {
     "collection-import": "Collection import", "collection-export": "Collection export",
 }
 _WEB_TITLES = {"search": "Added from search", "paste": "Pasted list", "deck": "Cards from a deck list"}
-# A card entry that only took copies OUT reads as a removal (set once its copies are counted).
-_REMOVAL_TITLES = {"Added by hand": "Removed by hand", "Added from search": "Removed by hand", "Added cards": "Removed cards"}
+
+
+
+def _direction_title(method: str, label: str, copies_in: int, copies_out: int) -> str | None:
+    """A card entry's title from where it came from AND which way its copies moved:
+    a census adjustment says so; a by-hand entry (CLI or web search) that only took
+    copies out reads as a removal. None keeps the source title (mixed or other paths)."""
+    from .ingest import CENSUS_LABEL_PREFIX, WEB_LABEL_PREFIX
+    if label.startswith(CENSUS_LABEL_PREFIX):
+        return "Census removal" if copies_out and not copies_in else "Census addition" if copies_in and not copies_out else "Census adjustment"
+    by_hand = method == "adhoc" and (not label.startswith(WEB_LABEL_PREFIX) or label.startswith(f"{WEB_LABEL_PREFIX}search"))
+    return "Removed by hand" if by_hand and copies_out and not copies_in else None
 _UNKNOWN_DETAIL = {
     "backfill:precon": "Reconstructed from precon decklists — which product is not known",
     "backfill:unattributed": "Residual of the reconstruction — source not known",
@@ -226,6 +236,7 @@ class HistoryEntry:
     revertible: bool = False         # its kind can be reverted (ingest.not_revertible_reason) and it hasn't been
     reverted_by: int | None = None   # the revert event that undid it (V35)
     reverts: int | None = None       # revert entries: the event they undid
+    _label: str = field(default="", repr=False)   # the raw ingest label (titles read it; never sent to the web)
 
 
 @dataclass
@@ -264,7 +275,7 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
     iid, at, method, label, path, status, rows_added, rows_updated, mode, reverts = e
     label = label or ""
     base = os.path.basename(path) if path and "/" in path else None
-    h = HistoryEntry(ingest_id=iid, at=at, method=method, kind="singles", title="", lines=(rows_added or 0) + (rows_updated or 0))
+    h = HistoryEntry(ingest_id=iid, at=at, method=method, kind="singles", title="", lines=(rows_added or 0) + (rows_updated or 0), _label=label)
     if status == "backfill":
         h.dated = "reconstructed"
     if method == "revert":
@@ -449,10 +460,8 @@ def _fill(h: HistoryEntry, rows, held: dict[tuple[int, str, str], int], prices: 
             h.printings += 1
             h.value_usd += n * (_unit_usd(prices.get(sid), fin) or 0.0)
     h.value_usd = round(h.value_usd, 2)
-    if h.kind == "singles" and h.copies_out and not h.copies_in:
-        h.title = "Census removal" if (h.detail or "").startswith("census:") else _REMOVAL_TITLES.get(h.title, h.title)
-    elif h.kind == "singles" and (h.detail or "").startswith("census:"):
-        h.title = "Census addition"
+    if h.kind == "singles":
+        h.title = _direction_title(h.method, h._label, h.copies_in, h.copies_out) or h.title
 
 
 def _as_of(prices: dict[str, dict]) -> str | None:
@@ -491,6 +500,7 @@ def _link_reverts(conn, entries: list[HistoryEntry]) -> None:
     by = {r[0]: r[1] for r in conn.execute(
         "SELECT reverts_ingest_id, ingest_id FROM ingest_events WHERE reverts_ingest_id IS NOT NULL")}
     titles: dict[int, str] = {}
+    listed = {h.ingest_id: h for h in entries}
     want = [h.reverts for h in entries if h.reverts is not None]
     if want:
         ctx = _context(conn)
@@ -498,7 +508,15 @@ def _link_reverts(conn, entries: list[HistoryEntry]) -> None:
             f"SELECT ingest_id, at, method, label, source_path, status, rows_added, rows_updated, mode, "
             f"reverts_ingest_id FROM ingest_events WHERE ingest_id IN ({','.join('?' * len(want))})", want,
         ):
-            o = _describe(e, *ctx)
+            o = listed.get(e[0])
+            if o is None:   # not in this list: describe it, and title it by its own ledger rows
+                o = _describe(e, *ctx)
+                cin, cout = conn.execute(
+                    "SELECT COALESCE(SUM(CASE WHEN delta > 0 THEN delta END), 0), "
+                    "COALESCE(SUM(CASE WHEN delta < 0 THEN -delta END), 0) FROM inventory_events WHERE ingest_id = ?",
+                    (o.ingest_id,)).fetchone()
+                if o.kind == "singles":
+                    o.title = _direction_title(o.method, o._label, cin, cout) or o.title
             titles[o.ingest_id] = o.title + (f" · {o.detail}" if o.detail else "")
     for h in entries:
         h.reverted_by = by.get(h.ingest_id)

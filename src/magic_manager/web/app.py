@@ -741,7 +741,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
 
-    # ---------- purchase history ----------
+    # ---------- history ----------
 
     @app.get("/api/history", response_model=history_api.HistoryOut, tags=["history"])
     def history_list():

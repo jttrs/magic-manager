@@ -1,4 +1,4 @@
-"""Purchase-history surface of the typed API: the acquisition timeline.
+"""History surface of the typed API: the acquisition timeline.
 
 Adapts :func:`magic_manager.provenance.history` / ``history_event`` — one entry
 per ledger ingest event (what came in, what it still accounts for, its value at
@@ -73,7 +73,7 @@ class HistoryEventOut(BaseModel):
 
 
 def _entry(h: provenance.HistoryEntry) -> HistoryEntryOut:
-    return HistoryEntryOut(**vars(h))
+    return HistoryEntryOut(**{k: v for k, v in vars(h).items() if not k.startswith("_")})
 
 
 def history() -> HistoryOut:

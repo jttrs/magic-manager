@@ -1,4 +1,4 @@
-"""provenance.history: the purchase-history timeline read off the V19 ledger."""
+"""provenance.history: the History timeline read off the V19 ledger."""
 from __future__ import annotations
 
 import pytest
@@ -143,16 +143,26 @@ def test_kind_meta_names_every_kind_once():
     assert len(set(labels)) == len(labels)
 
 
-def test_a_card_entry_that_only_removed_reads_as_a_removal():
+def test_card_entry_titles_follow_the_source_and_the_direction():
     from magic_manager import provenance
-    removal = provenance.HistoryEntry(ingest_id=1, at="2026-10-31", method="adhoc", kind="singles", title="Added by hand")
-    provenance._fill(removal, [(1, "a", "nonfoil", 0, 3, 0)], {}, {})
-    assert removal.title == "Removed by hand"
-    census = provenance.HistoryEntry(ingest_id=2, at="2026-10-31", method="adhoc", kind="singles", title="Added by hand",
-                                     detail="census:fin over-count removal")
-    provenance._fill(census, [(2, "a", "nonfoil", 0, 5, 0)], {}, {})
-    assert census.title == "Census removal"
-    added = provenance.HistoryEntry(ingest_id=3, at="2026-10-31", method="adhoc", kind="singles", title="Added by hand",
-                                    detail="census:fin loose cards")
-    provenance._fill(added, [(3, "a", "nonfoil", 2, 0, 2)], {}, {})
-    assert added.title == "Census addition"
+
+    def titled(method, label, title, cin, cout):
+        h = provenance.HistoryEntry(ingest_id=1, at="2026-10-31", method=method, kind="singles", title=title, _label=label)
+        rows = ([(1, "a", "nonfoil", cin, 0, cin)] if cin else []) + ([(1, "b", "nonfoil", 0, cout, 0)] if cout else [])
+        provenance._fill(h, rows, {}, {})
+        return h.title
+
+    assert titled("adhoc", "", "Added by hand", 0, 3) == "Removed by hand"
+    assert titled("adhoc", "web:search", "Added from search", 0, 1) == "Removed by hand"
+    assert titled("adhoc", "", "Added by hand", 2, 1) == "Added by hand"            # mixed: keeps the source title
+    assert titled("import-block", "web:paste · list", "Pasted list", 0, 2) == "Pasted list"
+    assert titled("adhoc", "census:fin over-count removal", "Added by hand", 0, 5) == "Census removal"
+    assert titled("import-block", "census:fin loose cards", "Imported list", 2, 0) == "Census addition"
+
+
+def test_history_api_serves_the_kinds_and_no_private_fields(seeded):
+    from magic_manager import provenance
+    from magic_manager.api import history as api
+    out = api.history()
+    assert [(k.kind, k.label, k.help) for k in out.kinds] == list(provenance.KIND_META)
+    assert "_label" not in api.HistoryEntryOut.model_fields

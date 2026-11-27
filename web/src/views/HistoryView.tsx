@@ -25,7 +25,7 @@ import { VirtualGuide } from '../components/VirtualGuide';
 import type { HistoryEntryOut, PurchaseOut } from '../core/api';
 import { exportLines } from '../core/guideCard';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historyCardGroups, kindCounts, kindMeta, type KindMeta, mergeOrders, movesSummary, type HistorySearch, type MonthGroup, type TimelineRow } from '../core/history';
+import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historyCardGroups, kindCounts, kindMeta, timelineRowCount, type KindMeta, mergeOrders, movesSummary, type HistorySearch, type MonthGroup, type TimelineRow } from '../core/history';
 import { STATUS_LABEL } from '../core/purchases';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { FindProductsDialog } from './history/FindProductsDialog';
@@ -134,7 +134,7 @@ export function HistoryView() {
   }
 
   return (
-    <ViewLayout label="History controls" summary={filtered ? `${fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar} subnav={<CollectionTabs />}>
+    <ViewLayout label="History controls" summary={filtered ? `${fmtCount(timelineRowCount(shown) + review.length + recorded.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
         title="History"
         actionsLabel="History actions"
@@ -296,7 +296,7 @@ function EntryInspector({ meta, ingestId, view, selected, onToggle, onView, onRe
         ) : (
           <b>Checklists before the ledger</b>
         )}{' '}
-        (or Provenance unknown), not here.
+        (or Origin unknown), not here.
       </EmptyNote>
     );
   } else if (!lines.length) {

@@ -339,7 +339,7 @@ def apply(path: str | Path, products: list[str] | None = None) -> dict:
         adds_event = removals_event = None
         touched: set[Key] = set()
         if p.adds:
-            label = f"census:{p.anchor} loose cards"
+            label = f"{ingest.CENSUS_LABEL_PREFIX}{p.anchor} loose cards"
             with ingest.open_ingest_event("import-block", label=label, conn=c) as rec:
                 adds_event = rec.ingest_id
                 for ln in p.adds:
@@ -352,7 +352,7 @@ def apply(path: str | Path, products: list[str] | None = None) -> dict:
                         rec.rows_updated += 1
                     touched.add((ln.scryfall_id, ln.finish))
         if p.removals:
-            label = f"census:{p.anchor} over-count removal"
+            label = f"{ingest.CENSUS_LABEL_PREFIX}{p.anchor} over-count removal"
             with ingest.open_ingest_event("adhoc", label=label, conn=c) as rec:
                 removals_event = rec.ingest_id
                 for ln in p.removals:
