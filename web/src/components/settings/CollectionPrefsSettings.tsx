@@ -137,7 +137,7 @@ function PrefRow({ row, busy, onChange }: { row: PrefOut; busy: boolean; onChang
               disabled={busy}
               aria-label={`Reset ${row.title} to its default`}
               onClick={() => onChange(null)}
-              className="text-sm"
+              className="touch-hit text-sm"
             >
               Reset
             </Button>

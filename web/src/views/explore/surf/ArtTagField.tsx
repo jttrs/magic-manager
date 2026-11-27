@@ -32,7 +32,7 @@ export function ArtTagField({ value, onChange }: { value: string[]; onChange: (v
               <Pressable
                 onClick={() => onChange(value.filter((v) => v !== t))}
                 aria-label={`Remove art tag ${tagLabel(t)}`}
-                className="inline-flex min-h-7 items-center gap-1.5 rounded-pill border border-accent bg-accent px-2.5 text-xs voice-semi text-on-accent!"
+                className="inline-flex min-h-7 items-center gap-1.5 rounded-pill border border-accent bg-accent px-2.5 text-xs voice-semi text-on-accent"
               >
                 {tagLabel(t)} <CloseMark className="size-icon-xs" />
               </Pressable>

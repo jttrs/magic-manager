@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 const sources = import.meta.glob(['/src/**/*.tsx', '!/src/**/*.test.tsx'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const rel = (k: string) => k.replace(/^\/src\//, '');
 
-/** The shared controls themselves: the only files that may draw raw elements. */
+/** The shared controls themselves: the only files that may draw raw elements. Every
+ *  entry must still need it (a test below fails on an exemption with nothing to exempt). */
 const CONTROL_FILES = new Set([
   'components/Button.tsx',
   'components/IconAction.tsx',
@@ -13,20 +14,14 @@ const CONTROL_FILES = new Set([
   'components/MarkToggle.tsx',
   'components/CopyButton.tsx',
   'components/CopyMarked.tsx',
-  'components/Sidebar.tsx',
-  'components/MultiSelect.tsx',
-  'components/SearchSelect.tsx',
   'components/SortBuilder.tsx',
   'components/ArrangeControls.tsx',
-  'components/SectionTabs.tsx',
-  'components/SplitPanes.tsx',
-  'components/GroupHead.tsx',
 ]);
 const isControl = (f: string) => f.startsWith('components/controls/') || f.startsWith('components/icons/') || CONTROL_FILES.has(f);
 const isIcon = (f: string) => f.startsWith('components/icons/');
 
 /** Charts and data marks: SVG geometry computed from data, not icons. */
-const CHART_FILES = new Set(['views/market/PriceHistory.tsx', 'components/ManaSymbols.tsx', 'components/ProgressRule.tsx']);
+const CHART_FILES = new Set(['views/market/PriceHistory.tsx']);
 
 /** Runtime-computed geometry (virtual rows, progress widths, chart positions). */
 const STYLE_FILES = new Set([
@@ -86,6 +81,16 @@ describe('no hand-rolled UI', () => {
   });
 
   it('inline style only for runtime geometry', () => {
-    expect(violations((f, s) => (STYLE_FILES.has(f) || !/style=\{\{/.test(s) ? [] : ['style={{…}} — use classes/tokens']))).toEqual([]);
+    expect(violations((f, s) => (STYLE_FILES.has(f) || !/\bstyle=\{/.test(s) ? [] : ['style={…} — use classes/tokens']))).toEqual([]);
+  });
+
+  it('every exemption is still needed', () => {
+    const src = (f: string) => sources[`/src/${f}`] ?? '';
+    const stale = [
+      ...[...CONTROL_FILES].filter((f) => !/<(button|input|select|textarea)\b/.test(src(f))).map((f) => `${f}: no raw control left — drop it from CONTROL_FILES`),
+      ...[...STYLE_FILES].filter((f) => !/\bstyle=\{/.test(src(f))).map((f) => `${f}: no inline style left — drop it from STYLE_FILES`),
+      ...[...CHART_FILES].filter((f) => !/<svg\b/.test(src(f))).map((f) => `${f}: no <svg> left — drop it from CHART_FILES`),
+    ];
+    expect(stale).toEqual([]);
   });
 });

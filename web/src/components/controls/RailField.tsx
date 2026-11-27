@@ -5,17 +5,21 @@ import type { ReactNode } from 'react';
  *  control. Every rail control goes through this, so label spacing is set once.
  *  Pass `htmlFor` when the control is a native field, `labelId` when it is labelled by
  *  `aria-labelledby` (a segmented group, a menu trigger). */
-export function RailField({ label, htmlFor, labelId, extra, children }: {
+export function RailField({ label, htmlFor, labelId, extra, children, tone = 'chrome', hideLabel = false }: {
   label: ReactNode;
   htmlFor?: string;
   labelId?: string;
   extra?: ReactNode;
   children: ReactNode;
+  /** `paper` when the field sits on a sheet or dialog. */
+  tone?: 'chrome' | 'paper';
+  /** Keep the label for screen readers only (the context names the field). */
+  hideLabel?: boolean;
 }) {
-  const cls = 'text-sm voice-semi text-on-chrome-muted';
+  const cls = hideLabel ? 'sr-only' : `text-sm voice-semi ${tone === 'paper' ? 'text-ink-muted' : 'text-on-chrome-muted'}`;
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="flex h-5 items-center gap-1.5">
+      <span className={hideLabel && !extra ? 'contents' : 'flex h-5 items-center gap-1.5'}>
         {htmlFor ? <label htmlFor={htmlFor} id={labelId} className={cls}>{label}</label> : <span id={labelId} className={cls}>{label}</span>}
         {extra}
       </span>

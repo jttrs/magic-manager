@@ -226,6 +226,43 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* Shared-control DEFAULTS that a caller may override live in the components layer,
+   below every utility: a class passed to <Pressable>/<ListRow> (a fill, alignment,
+   padding) always wins, whatever Tailwind's utility order. */
+@layer components {
+  .pressable {
+    cursor: pointer;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+  }
+
+  .pressable:disabled {
+    cursor: not-allowed;
+  }
+
+  .list-row {
+    display: flex;
+    width: 100%;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--theme-rule);
+    padding-inline: 0.25rem;
+    text-align: left;
+    transition-property: background-color;
+    transition-timing-function: var(--motion-ease-out);
+  }
+
+  .list-row:hover {
+    background: var(--theme-paper-sunk);
+  }
+
+  .list-row[aria-current='true'] {
+    background: var(--theme-highlight);
+  }
+}
+
 /* The highlighter: a translucent stroke laid behind text/captions, slightly
    ragged at the ends like a real marker pass. */
 @utility highlighter {

@@ -96,6 +96,7 @@ function FlagItem({ row, perUser, busy, onChange }: { row: FlagRowOut; perUser: 
         {row.pinned_by_env && <span className="text-on-chrome-muted">Pinned by environment</span>}
         {row.everyone != null && !row.pinned_by_env && (
           <Button
+            className="touch-hit"
             tone="chrome"
             emphasis="link"
             disabled={busy}

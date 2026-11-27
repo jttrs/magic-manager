@@ -22,8 +22,8 @@ export function dialogContentClass(size: DialogSize = 'sm', layout: 'stack' | 'f
 /** A dialog's title rule. */
 export const dialogTitleClass = 'border-b-2 border-rule-strong pb-2 text-2xl voice-condensed font-bold leading-none';
 
-/** A menu / popover / select-list panel on chrome. */
-export const menuPanelClass = 'z-50 rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-popover';
+/** A menu / popover / select-list panel on chrome — above dialogs (z-50), so a picker inside a dialog opens over it. */
+export const menuPanelClass = 'z-60 rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-popover';
 
 /** A menu's small caps heading. */
 export const menuLabelClass = 'px-3 pb-1 pt-1.5 text-xs voice-condensed uppercase tracking-caps text-on-chrome-muted';
