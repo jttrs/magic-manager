@@ -176,20 +176,31 @@ Depth is mostly tonal and ruled, not shadowed. The app chrome, raised chrome con
 ### Shadow Vocabulary
 - **Sheet settle** (`0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)`): one shadow on `GuideSheet`, enough to separate paper from chrome.
 - **Preview float** (`0_10px_24px_var(--theme-scrim)`): card-art hover preview above rows/tiles.
-- **Popover float** (`0_12px_28px_-12px_var(--theme-scrim)`): commander suggestion panel.
+- **Popover float** (`shadow-popover` = `0 12px 28px -12px scrim`): every menu, popover, tooltip and select list (`menuPanelClass`).
+- **Dialog float** (`shadow-dialog` = `0 24px 60px -24px scrim`): every dialog sheet (`dialogContentClass`).
 
 ### Named Rules
 **The Ruled-First Rule.** Prefer borders, hairlines, and tonal stock changes before shadows. Shadows are for floating previews, popovers, and the sheet resting on chrome.
 
 ## Shapes
 
-The shape language is nearly square, like printed stock and clipped guide labels. Default radii are tiny: `radius-xs` 2px, `radius-sm` 3px. Pills are reserved for chips, bars, highlighter handles, jobs pulse dots, and segmented capsule details. Actual card images keep their physical card radius via `rounded-[4.5%/3.2%]`; art crops and thumbnails use `radius-xs`.
+The shape language is nearly square, like printed stock and clipped guide labels. Default radii are tiny: `radius-xs` 2px, `radius-sm` 3px. Pills are reserved for chips, bars, highlighter handles, jobs pulse dots, and segmented capsule details. Actual card images keep their physical card shape via `aspect-card` + `rounded-card` (tokens `card.aspect` 488/680, `card.radius` 4.5%/3.2%); art crops and thumbnails use `radius-xs`.
 
 **Scrollbars** are part of the stock, not the OS: a slim pill thumb on a clear track (`::-webkit-scrollbar`; Firefox gets `scrollbar-width: thin`), tinted per surface through `--sb-thumb` — `theme.scrollbar-chrome` on chrome, `theme.scrollbar-paper` on paper sheets and dialogs — darkening on hover and lighting amber while dragged. Because they're always drawn, a row that scrolls sideways (`overflow-x: auto` — tab rows, the nav) must not overflow vertically, or it grows a stray vertical thumb: hang the **row** over its rule (`-mb-*` on the row), never the tabs inside it (`e2e/scroll-rows.spec.ts` guards this).
 
-Hairline borders are the main geometry. `ruled` is a 1px bottom border; column and section headings use 2px `rule-strong`; split separators use a 1px vertical rule; on hover/focus it turns amber and a small horizontal grip (wider than tall, ‹ ›) appears — never a tall pill, which reads as a scrollbar thumb. The `highlighter` utility is a ragged linear-gradient stroke behind text/rows, not a rectangular selected background.
+Hairline borders are the main geometry. `ruled` is a 1px bottom border; column and section headings use 2px `rule-strong`; split separators use a 1px vertical rule; on hover/focus it turns amber and a small horizontal grip (wider than tall, ‹ ›) appears — never a tall pill, which reads as a scrollbar thumb. The `highlighter` utility is a ragged linear-gradient stroke behind INLINE TEXT only (a caption, a status phrase, a met price). A selected list row is a flat `highlight` fill with square corners (`ListRow` `active`) — the tilted stroke cut a wedge out of tall rows.
 
 ## Components
+
+### Controls, icons and tokens (the one kit)
+Views and feature components are assembled from shared controls; nothing is hand-rolled. `components/controls/noHandRolled.test.ts` fails on a raw `<button>`/`<input>`/`<select>`/`<textarea>` outside the controls, an `<svg>` outside the icon module or a chart, a caret glyph used as an icon, a hard-coded value that has a token, or an inline `style` that isn't runtime geometry.
+- **Words:** `Button` (`tone` chrome | paper; `emphasis` quiet | primary | danger | danger-solid | link — `link` is the underlined inline text action).
+- **Icons only:** `IconAction` (tooltip = name; a pressed toggle — `aria-pressed` — takes the deeper `pressed` fill, never an underline); `iconActionClass` for a router link.
+- **Rows and regions:** `ListRow` (selectable list row; active = flat `highlight` fill) · `Pressable` (a clickable region whose look is its content: card art, a group head).
+- **Fields:** `TextInput` · `NumberField` · `Check` (checkbox/radio + words + hint) · `SelectInput` · `TextArea`, all on `fieldClass` (one height: `size-control`, 36px; 44px on touch) · `RailField` (label row + optional ⓘ + control).
+- **Overlays:** `dialogOverlayClass` / `dialogContentClass(sm | md | lg)` / `dialogTitleClass`; `menuPanelClass` / `menuLabelClass` / `menuItemClass` (`components/controls/surfaces.ts`).
+- **Icons:** every mark lives in `components/icons/marks.tsx` (store/site marks + app actions + UI glyphs: Check, Close, Caret, Info, Chevron…), sized only with `size-icon-xs | sm | md | lg` (14 / 16 / 20 / 22px).
+- **Tokens beyond colour:** `size-icon-*`, `size-control`, `size-icon-box`; `tracking-caps | caps-tight | caps-wide`; `max-w-measure-narrow | body | wide`; `dialog-sm | md | lg`; `aspect-card`, `rounded-card`; `shadow-popover`, `shadow-dialog`; `pressed` / `chrome-pressed`.
 
 ### AppShell + ViewLayout
 - **Purpose:** global masthead, primary nav, status icons, the Settings gear, sidebar-below-nav layout.
@@ -218,7 +229,8 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Sheet tabs (`nav` slot, legacy):** superseded by the sub-nav strip; views move their `SectionTabs` to `ViewLayout`'s `subnav`.
 
 ### Sidebar primitives
-- **SideSection:** uppercase condensed side heading plus vertical control stack.
+- **Rail rhythm:** the rail (`#view-controls`) sets ONE gap (12px) between every control; `SideSection` adds no spacing of its own (`display: contents`) — a printed heading adds one fixed space above it, a `quiet` one adds nothing. Every labelled control goes through `RailField`, whose label row is a fixed 20px (an ⓘ never makes it taller), and every control is `size-control` tall, so every filter row is the same height.
+- **SideSection:** uppercase condensed side heading (or a screen-reader-only one with `quiet`) grouping controls in the rail's rhythm.
 - **Segmented:** single-choice `ToggleGroup`, ruled chrome border, `chrome-raised` selected state.
 - **ChipToggles:** multi-select `ToggleGroup`, pill chips; selected chips fill amber and show optional tabular counts. **Only for ≤5 options that fit on ONE line** — if they'd wrap, use a `MultiSelect` picker (counts beside each option).
 - **Active state for categorical controls:** every on segment/toggle (Segmented, SegmentedToggles, ChipToggles) fills **amber** (`accent` / `on-accent`), off stays `on-chrome-muted` on chrome — one active language across the sidebar. Every control carries a visible label.
@@ -290,7 +302,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 ### CardTile and CardRow
 - **Purpose:** two densities for the same `GuideCard` view-model from `web/src/core/guideCard.ts`.
 - **Tile state:** button is `aria-pressed`; selected cards get an amber ring and highlighter caption.
-- **Row state:** checkbox marks a card; selected rows receive the highlighter utility.
+- **Row state:** the mark toggle marks a card; a marked row takes the flat `highlight` fill.
 - **Preview:** names trigger hover-card previews (`CardPreview`: art, then functions + Scryfall tags below it); card links open Scryfall when present.
 
 ### CardFace parts
@@ -306,9 +318,9 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Dialog (`CardInspector`, rendered once per `VirtualGuide`):** large Scryfall image left (stacked on phones), then name (`Dialog.Title`), type line, a `dl` of Printing · Mana value · Value (nonfoil / ✦ foil) · Cheapest (`CheapestPrinting`: the card's cheapest nonfoil and ✦ foil printing, `SET #cn` or `this printing`, with a muted scope — `among synced sets` at first; a trailing refresh icon *Recheck for cheapest* checks every printing once (then goes away), and the scope reads `checked all printings · 9:55 AM`; the scope line shows only beside a found price; no vendor named) · Owned · Functions, the printed Tags, Tagger chips, *Your copies* (`6 owned · 2 in built decks · 4 unused`), and, under a small `View on` label, ONE row of identical ghost links each led by its mark: `Scryfall` · `TCGplayer` at the left (TCGplayer = name search), the in-app `Explorer` at the right (no fill until hover, same as the others).
 
 ### Sheet actions + external links
-- **Sheet actions are icons** (`IconAction`: amber-ink mark, tooltip names it, `paper-sunk` wash on hover/focus — **no lift, no underline**; a pressed toggle (`aria-pressed`, e.g. *Bulk modify counts*) keeps the wash plus an amber underline) grouped in a `role=toolbar` — Collection: *Bulk modify counts* · *Add cards*; Purchase history: *Read my orders* · *Find products in your cards*; Decks: *New deck* · *Import a deck*. Outbound links are ghost links (mark + label, same wash). Reserve the filled amber `Button` for a flow's single commit (e.g. `Add 8 copies`, `Save deck`, `Record 3 products`).
+- **Sheet actions are icons** (`IconAction`: amber-ink mark, tooltip names it, `paper-sunk` wash on hover/focus — **no lift, no underline**; a pressed toggle (`aria-pressed`, e.g. *Bulk modify counts*) takes the deeper `pressed` fill — no underline) grouped in a `role=toolbar` — Collection: *Bulk modify counts* · *Add cards*; Purchase history: *Read my orders* · *Find products in your cards*; Decks: *New deck* · *Import a deck*. Outbound links are ghost links (mark + label, same wash). Reserve the filled amber `Button` for a flow's single commit (e.g. `Add 8 copies`, `Save deck`, `Record 3 products`).
 - **Icon action** (`IconAction`) = the same treatment without the words, for a ROW of related actions where labels would crowd (the deck header). The tooltip carries the words and is the accessible name; disabled icons go muted with a tooltip naming why. Two or more sibling actions → icons; a lone sheet action keeps its label.
-- **Every link or button that leaves the app carries the destination's monochrome mark** (`StoreMarks.tsx`, 24px stroke grid, `accent-ink` on paper / `accent` on chrome) instead of a generic ↗. The word is optional: keep it where there's room and the pair scans faster (inspector, phones' buy strip); drop it in tight rows (desktop buy strip), keeping `aria-label`/`title` `Open on <Site>` / `Copy <Store> list`. New external targets get a mark drawn after the site's own logo before they ship.
+- **Every link or button that leaves the app carries the destination's monochrome mark** (`components/icons/marks.tsx`, 24px stroke grid, `accent-ink` on paper / `accent` on chrome) instead of a generic ↗. The word is optional: keep it where there's room and the pair scans faster (inspector, phones' buy strip); drop it in tight rows (desktop buy strip), keeping `aria-label`/`title` `Open on <Site>` / `Copy <Store> list`. New external targets get a mark drawn after the site's own logo before they ship.
 
 ### Explore (`/explore`, was Commanders)
 - **One card, a chosen role.** Sidebar: `Card` (any card) + `Compare with` (optional) + `Explore as: As commander | As a card` (commander disabled with a reason when a card can't lead; unset = commander when it can). Both sides of a comparison share one role.
@@ -431,4 +443,4 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Don't** render more than 5 options as chips; use `MultiSelect`.
 - **Section heads (VirtualGuide):** every head is a disclosure (`aria-expanded` button inside the h2/h3, chevron left) with ▲▼ jump buttons on the right that scroll to and focus the previous/next head of the same level (`Next set family`, `Next set`, `Next card type`). Collapsing a level-1 head hides its level-2 sections. Level-1 heads say what they are inline beside the name (`BLOOMBURROW  SET FAMILY · BLB · BLC`, never a kicker above it); set sub-heads pair the code with the set name.
 - **Sheet header vs section heads:** the sheet's (screen-reader) title names the view (`Collection`) and its summary describes what the current filters SHOW; family heads carry family-wide facts (progress, owned/printings, copies, value). Never repeat the same numbers at both levels.
-- **Buy (bulk buy lists):** sidebar section `Buy` (single-word section titles); a label line `Copy bulk lists · 157 missing shown` (or `· 3 marked`) over a full-width ruled strip of equal 32px-tall cells, one per store (names beside the marks when the strip is ≥21.5rem wide, marks only when narrower): a monochrome store mark in amber (`StoreMarks.tsx`, drawn on a 24px stroke grid after each store's logo). Hover darkens the cell and lifts the mark 1px; a successful copy swaps the mark for a ✓ for 1.6s. Each cell has `aria-label`/`title` `Copy <Store> list`; one shared polite status line, where a store that can't take exact printings (Card Kingdom) says so. Kept small on purpose: an occasional action for most collectors. Owner-approved exception to the Amber-Only Rule: store marks are amber at rest.
+- **Buy (bulk buy lists):** sidebar section `Buy` (single-word section titles); a label line `Copy bulk lists · 157 missing shown` (or `· 3 marked`) over a full-width ruled strip of equal 32px-tall cells, one per store (names beside the marks when the strip is ≥21.5rem wide, marks only when narrower): a monochrome store mark in amber (`components/icons/marks.tsx`, drawn on a 24px stroke grid after each store's logo). Hover darkens the cell and lifts the mark 1px; a successful copy swaps the mark for a ✓ for 1.6s. Each cell has `aria-label`/`title` `Copy <Store> list`; one shared polite status line, where a store that can't take exact printings (Card Kingdom) says so. Kept small on purpose: an occasional action for most collectors. Owner-approved exception to the Amber-Only Rule: store marks are amber at rest.

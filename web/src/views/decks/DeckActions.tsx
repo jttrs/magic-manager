@@ -5,7 +5,7 @@ import { unwrap } from '../../app/queries';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { IconAction } from '../../components/IconAction';
 import { DeckCombosDialog } from '../../components/Combos';
-import { AddCardMark, BreakDownMark, BuildDeckMark, ComboMark, CopyDeckMark, EditDeckMark, PriceMark } from '../../components/StoreMarks';
+import { AddCardMark, BreakDownMark, BuildDeckMark, ComboMark, CopyDeckMark, EditDeckMark, PriceMark } from '../../components/icons/marks';
 import { deckBreakDown, deckBuild, deckBuildPlan, deckCopy, type BuildPlanOut, type DeckDetailOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 

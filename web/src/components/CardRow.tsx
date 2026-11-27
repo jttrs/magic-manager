@@ -5,6 +5,7 @@ import { fmtPct, fmtUsd } from '../core/format';
 import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
 import { CardHover } from './CardHover';
 import { MarkToggle } from './MarkToggle';
+import { Pressable } from './controls/Pressable';
 
 type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; onInspect?: (card: GuideCard) => void; barLabels?: [string, string] };
 
@@ -17,11 +18,10 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
         <CardArt card={card} crop className={card.missing ? 'opacity-55 grayscale-[0.7]' : ''} />
       </span>
       <CardHover card={card}>
-        <button
-          type="button"
+        <Pressable
           onClick={() => onInspect?.(card)}
           aria-label={`Inspect ${card.name}`}
-          className="flex w-fit min-w-0 max-w-full cursor-pointer items-baseline gap-2 text-left text-sm text-ink hover:underline"
+          className="flex w-fit min-w-0 max-w-full items-baseline gap-2 text-sm hover:underline"
         >
           <span className="truncate voice-semi">{card.name}</span>
           <span className="hidden shrink-0 text-2xs tabular text-ink-muted @[30rem]:inline" translate="no">
@@ -30,7 +30,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
           </span>
           {card.tags.length > 0 && <span className="hidden min-w-0 @[36rem]:block"><Tags tags={card.tags} /></span>}
           {card.note && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[24rem]:inline">{card.note}</span>}
-        </button>
+        </Pressable>
       </CardHover>
       <span className="flex items-center justify-end gap-2">
         {card.bars ? (
@@ -43,7 +43,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
           </>
         ) : card.pct != null ? (
           <span className="flex items-center gap-1.5">
-            <span className="relative hidden h-[3px] w-12 overflow-hidden rounded-pill bg-rule @[22rem]:block @[30rem]:w-24">
+            <span className="relative hidden h-bar w-12 overflow-hidden rounded-pill bg-rule @[22rem]:block @[30rem]:w-24">
               <span className="absolute inset-y-0 left-0 rounded-pill bg-rule-strong" style={{ width: `${Math.min(100, card.pct)}%` }} />
             </span>
             <span className="w-8 text-right text-2xs tabular text-ink">{fmtPct(card.pct)}</span>

@@ -7,7 +7,7 @@ import { IconAction } from '../../../components/IconAction';
 import { IconTooltip } from '../../../components/IconTooltip';
 import { iconActionClass } from '../../../components/iconActionClass';
 import { GuideSheet } from '../../../components/States';
-import { ScryfallMark, ShuffleMark } from '../../../components/StoreMarks';
+import { ScryfallMark, ShuffleMark } from '../../../components/icons/marks';
 import { surfDraw, type SurfDrawOut } from '../../../core/api';
 import { fmtInt } from '../../../core/format';
 import { activeFilters, decodeSurf, drawRequest, encodeSurf, EMPTY_FILTERS, feedCards, feedEnd, feedSummary, nextPage, scryfallSearchUrl, type Page, type SurfState } from '../../../core/surf';
@@ -106,7 +106,7 @@ export function CardSurfer({ raw, onChange, subnav }: { raw: string | undefined;
       {query && state.source === 'scryfall' && (
         <IconTooltip label="Open results in Scryfall">
           <a href={scryfallSearchUrl(query)} target="_blank" rel="noreferrer" aria-label="Open results in Scryfall (opens in a new tab)" className={iconActionClass('paper')}>
-            <ScryfallMark className="size-[1.35rem]" />
+            <ScryfallMark className="size-icon-lg" />
           </a>
         </IconTooltip>
       )}
@@ -185,7 +185,7 @@ function FeedNote({ title, children }: { title: string; children: React.ReactNod
 function Skeleton() {
   return (
     <div role="status" aria-label="Drawing random cards" className="grid min-h-full content-center justify-items-center gap-x-12 gap-y-6 px-4 py-8 lg:grid-cols-[auto_minmax(16rem,32rem)] lg:justify-center lg:justify-items-start">
-      <div className="aspect-[488/680] w-[min(100%,calc((100dvh-19rem)*0.7176),30rem)] lg:w-[min(calc((100dvh-19rem)*0.7176),30rem)] animate-pulse rounded-[4.5%/3.2%] bg-paper-sunk motion-reduce:animate-none" />
+      <div className="aspect-card w-[min(100%,calc((100dvh-19rem)*0.7176),30rem)] lg:w-[min(calc((100dvh-19rem)*0.7176),30rem)] animate-pulse rounded-card bg-paper-sunk motion-reduce:animate-none" />
       <div className="flex w-full max-w-[30rem] flex-col gap-3">
         <div className="h-8 w-2/3 rounded-xs bg-paper-sunk" />
         <div className="h-4 w-1/2 rounded-xs bg-paper-sunk" />

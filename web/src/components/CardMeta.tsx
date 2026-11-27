@@ -12,7 +12,7 @@ export function CardPreview({ card }: { card: GuideCard }) {
         <div className="flex flex-col gap-1.5 rounded-sm border border-rule bg-paper-raised px-2.5 py-2 text-ink">
           {fns.length > 0 && (
             <p className="flex flex-col gap-0.5">
-              <span className="text-2xs voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">Functions</span>
+              <span className="text-2xs voice-condensed font-medium uppercase tracking-caps text-ink-muted">Functions</span>
               <span className="text-sm voice-semi font-medium leading-snug">{fns.join(' · ')}</span>
             </p>
           )}

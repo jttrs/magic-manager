@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { adminUsersQuery, unwrap } from '../../app/queries';
+import { Pressable } from '../../components/controls/Pressable';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SettingsChoice, SettingsGroup, SettingsRow } from '../../components/settings/SettingsControls';
@@ -46,7 +47,7 @@ export function UserInspector({ user, paths, self, onClose }: { user: AdminUserO
     <article aria-labelledby="admin-user-h" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-8">
       <header className="flex flex-col gap-1 border-b-2 border-rule-strong pb-2">
         {onClose && (
-          <button type="button" onClick={onClose} className="mb-1 cursor-pointer self-start text-sm voice-semi text-ink-muted hover:text-ink">← People</button>
+          <Pressable onClick={onClose} className="mb-1 self-start text-sm voice-semi text-ink-muted hover:text-ink">← People</Pressable>
         )}
         <h2 id="admin-user-h" className="text-3xl voice-condensed font-bold leading-none">
           {user.display_name}
@@ -64,7 +65,7 @@ export function UserInspector({ user, paths, self, onClose }: { user: AdminUserO
           ['Joined', DATE.format(new Date(user.created_at))],
         ] as const).map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="ruled py-1.5 text-sm voice-semi uppercase tracking-[0.06em] text-ink-muted">{k}</dt>
+            <dt className="ruled py-1.5 text-sm voice-semi uppercase tracking-caps text-ink-muted">{k}</dt>
             <dd className="ruled py-1.5 tabular">{v}</dd>
           </div>
         ))}

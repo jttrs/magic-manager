@@ -4,6 +4,7 @@ import { meQuery, onSignedOut } from '../../app/auth';
 import { serverModeQuery } from '../../app/queries';
 import type { MeOut } from '../../core/api';
 import { authErrorMessage, loginHref, readSignInParams } from '../../core/auth';
+import { Button } from '../Button';
 import { buttonClass } from '../buttonClass';
 
 /** Hosted mode: nothing of the app renders until someone is signed in. Local mode: a pass-through. */
@@ -78,7 +79,7 @@ function SignInScreen({ me, failed, onRetry }: { me: MeOut | null; failed: boole
     <main className="grid min-h-dvh place-items-start justify-items-center bg-chrome px-3 pb-10 pt-[clamp(1.5rem,14vh,9rem)] text-on-chrome">
       <section
         aria-labelledby="signin-title"
-        className="paper-grain w-[min(27rem,100%)] rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)]"
+        className="paper-grain w-[min(27rem,100%)] rounded-sm bg-paper text-ink shadow-dialog"
       >
         <header className="border-b-2 border-rule-strong px-6 pb-3 pt-6">
           <h1 id="signin-title" className="text-3xl voice-condensed font-bold leading-none tracking-[-0.01em]" translate="no">
@@ -100,12 +101,12 @@ function SignInScreen({ me, failed, onRetry }: { me: MeOut | null; failed: boole
             </p>
           )}
           {failed ? (
-            <button type="button" onClick={onRetry} className={`${buttonClass('paper')} min-h-11 w-full`}>Try again</button>
+            <Button tone="paper" onClick={onRetry} className="min-h-control-coarse w-full">Try again</Button>
           ) : providers.length ? (
             <ul className="flex flex-col gap-2.5" aria-label="Sign in with">
               {providers.map((p) => (
                 <li key={p.name}>
-                  <a href={loginHref(p.login_url, invite, next)} className={`${buttonClass('paper')} min-h-11 w-full text-md no-underline`}>
+                  <a href={loginHref(p.login_url, invite, next)} className={`${buttonClass('paper')} min-h-control-coarse w-full text-md no-underline`}>
                     Continue with {p.title}
                   </a>
                 </li>

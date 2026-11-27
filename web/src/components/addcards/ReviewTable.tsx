@@ -1,6 +1,10 @@
 import { ToggleGroup } from 'radix-ui';
 import { chosenPrinting, sourceLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { fmtUsd } from '../../core/format';
+import { Check } from '../controls/Check';
+import { NumberField } from '../controls/TextField';
+import { CloseMark } from '../icons/marks';
+import { IconAction } from '../IconAction';
 import { PrintingPicker, PrintingThumb } from './PrintingPicker';
 
 type Patch = Partial<Pick<ReviewLine, 'qty' | 'finish' | 'chosen' | 'include'>>;
@@ -29,21 +33,19 @@ function ReviewRow({ line: l, onChange, onRemove }: { line: ReviewLine; onChange
   return (
     <li className={`ruled grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 py-2 @[44rem]:col-span-full @[44rem]:grid-cols-subgrid ${!l.include ? 'opacity-55' : ''}`}>
       <label className="-m-2 grid size-9 cursor-pointer place-items-center has-disabled:cursor-default">
-        <input
-          type="checkbox"
+        <Check
           checked={l.include}
           disabled={dead}
-          onChange={(e) => onChange({ include: e.target.checked })}
+          onChange={(include) => onChange({ include })}
           aria-label={`Include ${l.name}`}
-          className="size-4 cursor-pointer accent-[var(--theme-accent)] disabled:cursor-default"
         />
       </label>
       <PrintingThumb p={p} />
       <div className="min-w-0">
         <p className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-md voice-semi font-medium text-ink">{l.name}</span>
-          {l.status === 'ambiguous' && <span className="shrink-0 text-2xs voice-condensed uppercase tracking-[0.06em] text-accent-ink">Best guess</span>}
-          {dead && <span className="shrink-0 text-2xs voice-condensed uppercase tracking-[0.06em] text-danger">Not found</span>}
+          {l.status === 'ambiguous' && <span className="shrink-0 text-2xs voice-condensed uppercase tracking-caps text-accent-ink">Best guess</span>}
+          {dead && <span className="shrink-0 text-2xs voice-condensed uppercase tracking-caps text-danger">Not found</span>}
         </p>
         {source && <p className="truncate text-xs text-ink-muted" title={source}>{source}</p>}
       </div>
@@ -52,20 +54,15 @@ function ReviewRow({ line: l, onChange, onRemove }: { line: ReviewLine; onChange
       {!dead && (
         <>
           <span className="flex items-center gap-2 @[44rem]:col-start-7 @[44rem]:row-start-1">
-            <input
-              type="number"
-              inputMode="numeric"
+            <NumberField
               min={1}
               max={9999}
               value={l.qty}
-              onChange={(e) => onChange({ qty: Number(e.target.value) })}
+              onChange={(qty) => onChange({ qty })}
               aria-label={`Copies of ${l.name}`}
-              className="h-8 w-14 rounded-sm border border-rule bg-paper-raised px-1.5 text-right text-sm tabular text-ink focus-visible:border-accent"
             />
             {onRemove && (
-              <button type="button" onClick={onRemove} aria-label={`Remove ${l.name}`} title="Remove" className="grid size-9 cursor-pointer place-items-center rounded-sm text-lg text-ink-muted hover:bg-paper-sunk hover:text-ink">
-                ×
-              </button>
+              <IconAction label={`Remove ${l.name}`} Icon={CloseMark} onClick={onRemove} />
             )}
           </span>
           <div className="col-span-full flex min-w-0 items-center gap-2 pl-7 @[44rem]:contents">
@@ -84,7 +81,7 @@ function FinishToggle({ name, finishes, value, onChange }: { name: string; finis
   // toggle's box (same border inset + item padding) so its text starts where the toggle's does.
   if (finishes.length < 2) {
     return (
-      <span className="inline-flex min-h-9 items-center border border-transparent p-0.5">
+      <span className="inline-flex min-h-control items-center border border-transparent p-0.5">
         <span className="px-2.5 text-xs voice-semi text-ink-muted">{FINISH_LABEL[finishes[0] ?? 'nonfoil']} only</span>
       </span>
     );

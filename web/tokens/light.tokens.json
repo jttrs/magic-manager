@@ -21,6 +21,8 @@
     "danger": { "$value": "{color.rust.700}" },
     "focus": { "$value": "{color.amber.500}" },
     "scrim": { "$value": "#100d09b3" },
+    "pressed": { "$value": "{color.bone.300}", "$description": "A pressed icon toggle on paper (distinct from the hover fill, paper-sunk)." },
+    "chrome-pressed": { "$value": "{color.charcoal.700}", "$description": "A pressed icon toggle on chrome." },
     "scrollbar-chrome": { "$value": "{color.charcoal.600}", "$description": "Scrollbar thumb on chrome (and -paper on guide sheets); the track stays clear." },
     "scrollbar-chrome-hover": { "$value": "{color.taupe.500}" },
     "scrollbar-paper": { "$value": "{color.taupe.400}" },

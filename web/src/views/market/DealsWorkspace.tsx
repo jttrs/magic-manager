@@ -5,7 +5,8 @@ import { ScraperDownMark } from '../../components/ScraperNotice';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { useMediaQuery } from '../../app/useMediaQuery';
 import { Button } from '../../components/Button';
-import { Chevron } from '../../components/Chevron';
+import { Pressable } from '../../components/controls/Pressable';
+import { Chevron } from '../../components/icons/Chevron';
 import { EmptyNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
 import { BASIS_LABEL, deltaLabel, effectiveType, filterListings, filterSortProducts, gapOf, listingStatus, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct, type TabListing } from '../../core/deals';
@@ -77,9 +78,9 @@ export function MasterDetail({ list, inspector, open, onBack, backLabel, splitId
   if (narrow) {
     return open ? (
       <div className="flex h-full min-h-0 flex-col">
-        <button type="button" onClick={onBack} className="touch-hit mx-4 inline-flex min-h-11 cursor-pointer items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
+        <Pressable onClick={onBack} className="touch-hit mx-4 inline-flex min-h-11 items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
           <Chevron dir="left" className="size-3.5" /> {backLabel}
-        </button>
+        </Pressable>
         <div className="min-h-0 flex-1">{inspector}</div>
       </div>
     ) : list;
@@ -102,7 +103,7 @@ function Split({ id, list, inspector }: { id: string; list: ReactNode; inspector
 }
 
 const TH = 'py-1.5 pl-3 text-right font-medium';
-const GROUP_H = 'pb-1 pt-3 text-left text-sm voice-condensed font-medium uppercase tracking-[0.06em]';
+const GROUP_H = 'pb-1 pt-3 text-left text-sm voice-condensed font-medium uppercase tracking-caps';
 
 type TableProps = {
   shown: DealProduct[]; pinned: DealProduct[]; listings: TabListing[]; costs: DealCosts; basis: MarketSearch['basis'];
@@ -141,13 +142,14 @@ function ProductTable({ shown, pinned, listings, costs, basis, item, onPick, onD
                 <span className="flex items-baseline gap-2">
                   <span className="min-w-0 truncate">From your open tabs</span>
                   <span className="tabular normal-case tracking-normal text-ink-muted">{fmtInt(fromTabs)}</span>
-                  <button
-                    type="button"
+                  <Button
+                    tone="paper"
+                    emphasis="link"
                     onClick={() => onDismiss([...pinned.map((p) => p.key), ...listings.map((l) => l.key)])}
-                    className="touch-hit ml-auto cursor-pointer text-xs normal-case tracking-normal text-ink-muted underline hover:text-ink"
+                    className="touch-hit ml-auto text-xs normal-case tracking-normal"
                   >
                     Dismiss all
-                  </button>
+                  </Button>
                 </span>
               </th>
             </tr>
@@ -175,7 +177,7 @@ function ProductTable({ shown, pinned, listings, costs, basis, item, onPick, onD
 }
 
 const ROW = 'cursor-pointer border-b border-rule/60 align-top transition-colors ease-guide hover:bg-paper-sunk';
-const ROW_ACTION = 'touch-hit cursor-pointer text-xs underline';
+const ROW_ACTION = 'touch-hit text-xs';
 
 /** Watch / Dismiss under a pinned product's name. */
 function PinnedActions({ p, onDismiss }: { p: DealProduct; onDismiss: () => void }) {
@@ -183,11 +185,11 @@ function PinnedActions({ p, onDismiss }: { p: DealProduct; onDismiss: () => void
   return (
     <span className="mt-0.5 flex flex-wrap items-baseline gap-x-3">
       {p.best && p.match && (
-        <button type="button" disabled={watch.isPending} onClick={() => watch.mutate()} className={`${ROW_ACTION} voice-semi font-medium text-accent-ink disabled:cursor-default disabled:opacity-60`}>
+        <Pressable disabled={watch.isPending} onClick={() => watch.mutate()} className={`${ROW_ACTION} underline voice-semi font-medium text-accent-ink disabled:cursor-default disabled:opacity-60`}>
           {watch.isPending ? 'Saving…' : 'Watch'}<span className="sr-only"> {p.name}</span>
-        </button>
+        </Pressable>
       )}
-      <button type="button" onClick={onDismiss} className={`${ROW_ACTION} text-ink-muted hover:text-ink`}>Dismiss<span className="sr-only"> {p.name}</span></button>
+      <Button tone="paper" emphasis="link" onClick={onDismiss} className={ROW_ACTION}>Dismiss<span className="sr-only"> {p.name}</span></Button>
       {watch.isError && <span role="alert" className="text-xs text-danger">{(watch.error as Error).message}</span>}
     </span>
   );
@@ -201,12 +203,12 @@ function ListingRow({ l, selected, onPick, onDismiss }: { l: TabListing; selecte
   return (
     <tr onClick={(e) => { if (!(e.target as HTMLElement).closest('a,button')) onPick(); }} className={ROW}>
       <th scope="row" className="py-2 pr-3 text-left font-normal">
-        <button type="button" data-product onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 cursor-pointer text-left text-md voice-semi font-medium text-ink md:min-h-0">
+        <Pressable data-product onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 text-md voice-semi font-medium text-ink md:min-h-0">
           <span className={selected ? 'highlighter' : ''}>{l.title}</span>
-        </button>
+        </Pressable>
         <span className={`block text-xs ${r.error ? 'text-danger' : 'text-ink-muted'}`}>{listingStatus(l)}</span>
         <span className="mt-0.5 flex flex-wrap items-baseline gap-x-3">
-          <button type="button" onClick={onDismiss} className={`${ROW_ACTION} text-ink-muted hover:text-ink`}>Dismiss<span className="sr-only"> {l.title}</span></button>
+          <Button tone="paper" emphasis="link" onClick={onDismiss} className={ROW_ACTION}>Dismiss<span className="sr-only"> {l.title}</span></Button>
         </span>
       </th>
       <td className="py-2 pl-3 text-right">
@@ -244,9 +246,9 @@ function ProductRow({ p, cost, state, basis, selected, onPick, onDismiss }: { p:
       className={ROW}
     >
       <th scope="row" className="py-2 pr-3 text-left font-normal">
-        <button type="button" data-product onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 cursor-pointer text-left text-md voice-semi font-medium text-ink md:min-h-0">
+        <Pressable data-product onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 text-md voice-semi font-medium text-ink md:min-h-0">
           <span className={selected ? 'highlighter' : ''}>{p.name}</span>
-        </button>
+        </Pressable>
         <span className="block text-xs text-ink-muted">
           {[p.set_code.toUpperCase(), PRODUCT_TYPE_LABEL[type], p.finish === 'foil' && 'foil'].filter(Boolean).join(' · ')}
         </span>

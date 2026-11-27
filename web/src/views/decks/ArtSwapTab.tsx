@@ -5,7 +5,9 @@ import { useJobAllowed } from '../../app/jobAccess';
 import { useDebounced } from '../../app/useDebounced';
 import { useJob } from '../../app/useJob';
 import { Button } from '../../components/Button';
-import { Chevron } from '../../components/Chevron';
+import { Pressable } from '../../components/controls/Pressable';
+import { TextInput } from '../../components/controls/TextField';
+import { Chevron } from '../../components/icons/Chevron';
 import { ProgressRule } from '../../components/ProgressRule';
 import { EmptyNote } from '../../components/States';
 import type { ArtTagRefOut, PrintingOut } from '../../core/api';
@@ -44,7 +46,7 @@ export function ArtSwapTab({ draft, onEdit, onInspect, tag, onTag }: { draft: Dr
     <div className="flex min-h-0 flex-1 flex-col">
       <TagPicker tag={tag} onTag={onTag} />
       {!tag ? (
-        <p className="mx-4 mt-4 max-w-[52ch] text-sm text-ink-muted">
+        <p className="mx-4 mt-4 max-w-measure-narrow text-sm text-ink-muted">
           Pick an art theme and each card in the deck that has a printing with that art shows up here, on a printing you have unused, else the cheapest.
         </p>
       ) : q.isError ? (
@@ -77,7 +79,8 @@ function TagPicker({ tag, onTag }: { tag: ArtTagRefOut | null; onTag: (t: ArtTag
   return (
     <div className="mx-4 mt-3 flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm voice-semi text-ink-muted">Art theme</label>
-      <input
+      <TextInput
+        tone="paper"
         id={id}
         type="search"
         value={text}
@@ -92,7 +95,6 @@ function TagPicker({ tag, onTag }: { tag: ArtTagRefOut | null; onTag: (t: ArtTag
         autoComplete="off"
         spellCheck={false}
         aria-describedby={`${id}-hint`}
-        className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
       />
       <div id={`${id}-hint`} className={`flex flex-wrap items-center gap-1.5 ${editing || !tag ? 'min-h-8' : ''}`} aria-live="polite">
         {editing ? (
@@ -116,9 +118,9 @@ function TagPicker({ tag, onTag }: { tag: ArtTagRefOut | null; onTag: (t: ArtTag
 
 function Chip({ children, onClick, title }: { children: ReactNode; onClick: () => void; title?: string }) {
   return (
-    <button type="button" onClick={onClick} title={title} className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-pill border border-rule px-2.5 text-sm text-ink hover:border-rule-strong hover:bg-paper-sunk focus-visible:border-accent">
+    <Pressable onClick={onClick} title={title} className="inline-flex min-h-7 items-center gap-1 rounded-pill border border-rule px-2.5 text-sm text-ink hover:border-rule-strong hover:bg-paper-sunk focus-visible:border-accent">
       {children}
-    </button>
+    </Pressable>
   );
 }
 
@@ -193,9 +195,9 @@ function ArtLine({ r, onEdit, onInspect }: { r: ArtRow; onEdit: Edit; onInspect:
             <Chevron dir="right" className="size-3.5 shrink-0 text-ink-muted" />
           </>
         )}
-        <button type="button" onClick={() => onInspect(target)} className="shrink-0 cursor-pointer rounded-xs" aria-label={`Inspect ${target.name}, ${where(target)}`}>
+        <Pressable onClick={() => onInspect(target)} className="shrink-0 rounded-xs" aria-label={`Inspect ${target.name}, ${where(target)}`}>
           <Thumb p={target} size="md" />
-        </button>
+        </Pressable>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-md voice-semi font-medium text-ink">{cur.name}{r.row.count > 1 && <span className="tabular text-ink-muted"> ×{r.row.count}</span>}</span>
           <span className="truncate text-xs tabular text-ink-muted">
@@ -203,27 +205,27 @@ function ArtLine({ r, onEdit, onInspect }: { r: ArtRow; onEdit: Edit; onInspect:
             {r.status === 'swapped' && was && <> · <span className="voice-semi text-accent-ink">was {where(was)}</span></>}
           </span>
           {others.length > 0 && (
-            <button type="button" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((o) => !o)} className="-ml-1 inline-flex cursor-pointer items-center gap-0.5 self-start rounded-xs px-1 text-xs voice-semi text-ink-muted hover:bg-paper-sunk hover:text-ink">
+            <Pressable aria-expanded={open} aria-controls={listId} onClick={() => setOpen((o) => !o)} className="-ml-1 inline-flex items-center gap-0.5 self-start rounded-xs px-1 text-xs voice-semi text-ink-muted hover:bg-paper-sunk hover:text-ink">
               {others.length} other {others.length === 1 ? 'printing' : 'printings'} <Chevron dir={open ? 'up' : 'down'} className="size-3" />
-            </button>
+            </Pressable>
           )}
         </span>
         {r.status === 'swap' && (
-          <button type="button" onClick={() => swapTo(target)} aria-label={`Swap ${cur.name} to ${where(target)}`} className="shrink-0 cursor-pointer rounded-sm px-2 py-1 text-sm voice-semi text-accent-ink hover:bg-paper-sunk">Swap</button>
+          <Pressable onClick={() => swapTo(target)} aria-label={`Swap ${cur.name} to ${where(target)}`} className="shrink-0 rounded-sm px-2 py-1 text-sm voice-semi text-accent-ink hover:bg-paper-sunk">Swap</Pressable>
         )}
         {r.status === 'swapped' && (
-          <button type="button" onClick={() => onEdit((d) => restorePrinting(d, r.row.key))} aria-label={`Undo swap of ${cur.name}`} className="shrink-0 cursor-pointer rounded-sm px-2 py-1 text-sm voice-semi text-ink-muted hover:bg-paper-sunk hover:text-ink">Undo</button>
+          <Pressable onClick={() => onEdit((d) => restorePrinting(d, r.row.key))} aria-label={`Undo swap of ${cur.name}`} className="shrink-0 rounded-sm px-2 py-1 text-sm voice-semi text-ink-muted hover:bg-paper-sunk hover:text-ink">Undo</Pressable>
         )}
       </div>
       {open && (
         <ul id={listId} aria-label={`Other ${cur.name} printings with this art`} className="mt-1.5 flex gap-2 overflow-x-auto pb-1 pl-[calc(2.75rem+1.375rem)]">
           {others.map((p) => (
             <li key={p.scryfall_id} className="shrink-0">
-              <button type="button" onClick={() => { swapTo(p); setOpen(false); }} aria-label={`Use ${where(p)}, ${note(p).text}`} className="flex w-24 cursor-pointer flex-col gap-0.5 rounded-sm p-1 text-left hover:bg-paper-sunk focus-visible:bg-paper-sunk">
+              <Pressable onClick={() => { swapTo(p); setOpen(false); }} aria-label={`Use ${where(p)}, ${note(p).text}`} className="flex w-24 flex-col gap-0.5 rounded-sm p-1 text-left hover:bg-paper-sunk focus-visible:bg-paper-sunk">
                 {p.image_uri ? <img src={crop(p.image_uri)} alt="" loading="lazy" decoding="async" className="h-16 w-full rounded-xs object-cover" /> : <span aria-hidden="true" className="h-16 w-full rounded-xs border border-rule bg-paper-sunk" />}
                 <span className="truncate text-xs tabular text-ink">{where(p)}</span>
                 <span className={`truncate text-xs tabular ${note(p).free ? 'text-accent-ink' : 'text-ink-muted'}`}>{note(p).text}</span>
-              </button>
+              </Pressable>
             </li>
           ))}
         </ul>

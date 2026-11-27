@@ -34,7 +34,7 @@ export function BookmarkletLink({ href, label }: { href: string; label: string }
     <a
       ref={ref}
       onClick={(e) => e.preventDefault()}
-      className="inline-flex min-h-9 cursor-grab items-center rounded-sm border border-dashed border-accent px-3 text-sm voice-semi font-medium text-ink no-underline"
+      className="inline-flex min-h-control cursor-grab items-center rounded-sm border border-dashed border-accent px-3 text-sm voice-semi font-medium text-ink no-underline"
       title="Drag me to your bookmarks bar"
     >
       {label}

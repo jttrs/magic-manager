@@ -15,13 +15,13 @@ export type SectionTab = {
 
 // No negative bottom margin: the row scrolls sideways, so a tab hanging below it
 // would give the row a vertical scrollbar. The underline sits on the rule.
-const TAB = 'relative shrink-0 text-sm voice-semi uppercase tracking-[0.06em] no-underline transition-colors ease-guide after:absolute after:inset-x-0 after:bottom-0 after:rounded-pill';
+const TAB = 'relative shrink-0 text-sm voice-semi uppercase tracking-caps no-underline transition-colors ease-guide after:absolute after:inset-x-0 after:bottom-0 after:rounded-pill';
 const TONE = {
   // The sub-nav strip under the top nav: chrome stock, quieter than the top nav
   // (small semi-condensed caps, a 2px underline instead of 3px).
   chrome: {
     row: 'flex min-h-10 items-stretch gap-6 overflow-x-auto px-4 lg:px-5',
-    tab: 'flex items-center py-2 hover:text-on-chrome after:h-[2px]',
+    tab: 'flex items-center py-2 hover:text-on-chrome after:h-underline-quiet',
     routed: 'text-on-chrome-muted after:bg-transparent data-[status=active]:text-on-chrome data-[status=active]:after:bg-accent',
     on: 'text-on-chrome after:bg-accent',
     off: 'text-on-chrome-muted after:bg-transparent',
@@ -29,7 +29,7 @@ const TONE = {
   // Legacy: tabs across the top of a GuideSheet (its `nav` slot).
   paper: {
     row: 'flex gap-5 overflow-x-auto border-b border-rule px-5 pt-2',
-    tab: 'py-1.5 hover:text-ink after:h-[3px]',
+    tab: 'py-1.5 hover:text-ink after:h-underline',
     routed: 'text-ink-muted after:bg-transparent data-[status=active]:text-ink data-[status=active]:after:bg-accent',
     on: 'text-ink after:bg-accent',
     off: 'text-ink-muted after:bg-transparent',

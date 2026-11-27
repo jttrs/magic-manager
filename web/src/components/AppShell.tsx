@@ -4,6 +4,8 @@ import { jobsQuery } from '../app/queries';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconTooltip } from './IconTooltip';
+import { Pressable } from './controls/Pressable';
+import { CaretMark, JobsMark } from './icons/marks';
 import { iconActionClass } from './iconActionClass';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
@@ -51,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   to={n.to}
                   className="relative flex items-center px-1.5 text-md voice-condensed sm:px-3 sm:text-xl text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome
-                             after:absolute after:inset-x-1.5 after:bottom-0 sm:after:inset-x-3 after:h-[3px] after:rounded-pill after:bg-transparent
+                             after:absolute after:inset-x-1.5 after:bottom-0 sm:after:inset-x-3 after:h-underline after:rounded-pill after:bg-transparent
                              data-[status=active]:text-on-chrome data-[status=active]:after:bg-accent"
                 >
                   {n.label}
@@ -121,21 +123,20 @@ export function ViewLayout({ sidebar, children, label, summary, startOpen = fals
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <aside aria-label={label} className="relative min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-3">
           {!wide && (
-            <button
-              type="button"
+            <Pressable
               aria-expanded={open}
               aria-controls="view-controls"
               onClick={() => setOpen((o) => !o)}
-              className="flex w-full cursor-pointer items-center gap-3 py-1 text-left"
+              className="flex w-full items-center gap-3 py-1"
             >
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-md voice-condensed uppercase tracking-[0.06em] text-on-chrome">{label}</span>
+                <span className="text-md voice-condensed uppercase tracking-caps text-on-chrome">{label}</span>
                 {summary && !open && <span className="truncate text-xs text-on-chrome-muted">{summary}</span>}
               </span>
-              <span aria-hidden="true" className={`text-on-chrome transition-transform ease-guide ${open ? 'rotate-180' : ''}`}>▾</span>
-            </button>
+              <CaretMark className={`size-icon-sm text-on-chrome transition-transform ease-guide ${open ? 'rotate-180' : ''}`} />
+            </Pressable>
           )}
-          <div id="view-controls" hidden={!shown} className={`flex-col gap-4 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>
+          <div id="view-controls" hidden={!shown} className={`flex-col gap-3 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>
         </aside>
         <main id="main" tabIndex={-1} className="min-h-0 min-w-0 lg:h-full">
           <SheetHeaderSlots.Provider value={slots}>{children}</SheetHeaderSlots.Provider>
@@ -184,9 +185,7 @@ function JobsLink() {
         aria-label={label}
         className={`${iconActionClass('chrome')} ${running ? '' : 'max-sm:hidden'}`}
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[1.125rem]">
-          <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
+        <JobsMark className="size-icon-md" />
         {running > 0 && <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 animate-pulse rounded-pill bg-accent" />}
       </Link>
     </IconTooltip>

@@ -1,6 +1,13 @@
 import { Popover } from 'radix-ui';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { bulkActions, pickCount, pickSummary, type PickMode } from '../core/multiSelect';
+import { Button } from './Button';
+import { Check } from './controls/Check';
+import { RailField } from './controls/RailField';
+import { TextInput } from './controls/TextField';
+import { triggerClass } from './controls/fieldClass';
+import { menuPanelClass } from './controls/surfaces';
+import { CaretMark } from './icons/marks';
 
 type MultiOption = { value: string; label: string; count?: number; group?: string };
 
@@ -23,7 +30,7 @@ type Props = {
 };
 
 /**
- * Many-option picker: a compact trigger ("Final Fantasy +2 ▾") opening a
+ * Many-option picker: a compact trigger ("Final Fantasy +2") opening a
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
@@ -52,18 +59,14 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
   const toggle = (v: string) => onChange(selected.has(v) ? value.filter((x) => x !== v) : [...value, v]);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1.5">
-        <span id={`${id}-l`} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
-        {labelExtra}
-      </span>
+    <RailField label={label} labelId={`${id}-l`} extra={labelExtra}>
       <Popover.Root onOpenChange={(o) => !o && setQ('')}>
         <Popover.Trigger
           aria-labelledby={`${id}-l ${id}-s`}
-          className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
+          className={triggerClass('chrome')}
         >
           <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${unfiltered ? 'text-on-chrome-muted' : ''}`}>{summary}</span>
-          <span aria-hidden="true" className="text-on-chrome-muted">▾</span>
+          <CaretMark className="size-icon-sm shrink-0 text-on-chrome-muted" />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
@@ -78,10 +81,10 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
               e.preventDefault();
               (e.currentTarget as HTMLElement).focus({ preventScroll: true });
             }}
-            className={`z-50 flex focus:outline-none flex-col ${grouped ? "max-h-[min(36rem,85dvh)] w-[min(26rem,calc(100vw-1.5rem))]" : "max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)]"} rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]`}
+            className={`flex focus:outline-none flex-col ${grouped ? "max-h-[min(36rem,85dvh)] w-[min(26rem,calc(100vw-1.5rem))]" : "max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)]"} ${menuPanelClass}`}
           >
             <div className="flex flex-col gap-2 border-b border-chrome-line p-2">
-              {searchable && <input
+              {searchable && <TextInput
                 type="search"
                 aria-label={`Filter ${noun}`}
                 placeholder={placeholder}
@@ -89,13 +92,12 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                 spellCheck={false}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="min-h-8 rounded-sm border border-chrome-line bg-chrome px-2 text-sm text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
               />}
               <div className="flex gap-3 text-xs">
                 {bulk.map((b) => (
-                  <button key={b.label} type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(b.next)}>
+                  <Button key={b.label} emphasis="link" onClick={() => onChange(b.next)}>
                     {b.label}
-                  </button>
+                  </Button>
                 ))}
                 <span className="ml-auto tabular text-on-chrome-muted">{pickCount(mode, options, value)}</span>
               </div>
@@ -107,17 +109,17 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                   <legend className={group ? 'flex w-full items-baseline gap-2 px-3 pb-1 pt-2' : 'sr-only'}>
                     {group ? (
                       <>
-                        <span className="text-xs voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">{group}</span>
+                        <span className="text-xs voice-condensed uppercase tracking-caps text-on-chrome-muted">{group}</span>
                         <span className="ml-auto flex gap-2 text-xs">
-                          <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" aria-label={`Select all ${group}`} onClick={() => onChange([...new Set([...value, ...opts.map((o) => o.value)])])}>All</button>
-                          <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" aria-label={`Clear all ${group}`} onClick={() => onChange(value.filter((v) => !opts.some((o) => o.value === v)))}>None</button>
+                          <Button emphasis="link" aria-label={`Select all ${group}`} onClick={() => onChange([...new Set([...value, ...opts.map((o) => o.value)])])}>All</Button>
+                          <Button emphasis="link" aria-label={`Clear all ${group}`} onClick={() => onChange(value.filter((v) => !opts.some((o) => o.value === v)))}>None</Button>
                         </span>
                       </>
                     ) : label}
                   </legend>
                   {opts.map((o) => (
                     <label key={o.value} className="flex cursor-pointer items-start gap-2.5 px-3 py-1.5 text-sm hover:bg-chrome-line">
-                      <input type="checkbox" checked={selected.has(o.value)} onChange={() => toggle(o.value)} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--theme-accent)]" />
+                      <Check checked={selected.has(o.value)} onChange={() => toggle(o.value)} />
                       <span className={`min-w-0 flex-1 ${grouped ? "line-clamp-2 break-words" : "truncate"}`}>{o.label}</span>
                       {o.count != null && <span className="tabular text-xs text-on-chrome-muted">{o.count}</span>}
                     </label>
@@ -128,6 +130,6 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-    </div>
+    </RailField>
   );
 }

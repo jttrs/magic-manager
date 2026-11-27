@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState, type FormEvent } from 'react';
 import { unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
+import { Check } from '../../components/controls/Check';
+import { TextInput } from '../../components/controls/TextField';
 import { dealsClearTarget, dealsSetTarget, type ProductCostOut, type TargetOut } from '../../core/api';
 import { targetMet, trustedBest, targetPriceOf, targetText, type DealProduct } from '../../core/deals';
 import { fmtUsd } from '../../core/format';
@@ -44,20 +46,19 @@ export function PriceTarget({ product: p, cost }: { product: DealProduct; cost?:
         <fieldset className="flex flex-col gap-1">
           <legend className="text-xs voice-semi text-ink-muted">Target as</legend>
           <span className="inline-flex gap-3 text-sm text-ink">
-            <label className="inline-flex min-h-9 cursor-pointer items-center gap-1.5">
-              <input type="radio" name={`${id}-mode`} checked={mode === 'price'} onChange={() => setMode('price')} className="accent-[var(--theme-accent)]" /> A price
-            </label>
-            <label className="inline-flex min-h-9 cursor-pointer items-center gap-1.5">
-              <input type="radio" name={`${id}-mode`} checked={mode === 'pct_under'} onChange={() => setMode('pct_under')} className="accent-[var(--theme-accent)]" />
+            <Check type="radio" name={`${id}-mode`} checked={mode === 'price'} onChange={() => setMode('price')}>A price</Check>
+            <Check type="radio" name={`${id}-mode`} checked={mode === 'pct_under'} onChange={() => setMode('pct_under')}>
               % under {p.kind === 'single' ? 'its value' : 'sealed value'}
-            </label>
+            </Check>
           </span>
         </fieldset>
         <label className="flex flex-col gap-1 text-xs voice-semi text-ink-muted">
           {mode === 'price' ? 'Price (USD)' : 'Percent under'}
-          <span className="inline-flex h-9 items-center rounded-sm border border-rule-strong bg-paper-raised px-2 text-md text-ink focus-within:border-accent">
+          <span className="inline-flex items-center gap-1.5 text-md text-ink">
             {mode === 'price' && <span aria-hidden="true" className="text-ink-muted">$</span>}
-            <input
+            <TextInput
+              tone="paper"
+              width="auto"
               type="text"
               inputMode="decimal"
               autoComplete="off"
@@ -65,7 +66,6 @@ export function PriceTarget({ product: p, cost }: { product: DealProduct; cost?:
               onChange={(e) => setText(e.target.value.replace(/[^0-9.]/g, ''))}
               aria-invalid={(text !== '' && !valid) || undefined}
               placeholder={mode === 'price' ? '0.00' : '15'}
-              className="w-20 bg-transparent px-1 tabular outline-none placeholder:text-ink-muted"
             />
             {mode === 'pct_under' && <span aria-hidden="true" className="text-ink-muted">%</span>}
           </span>

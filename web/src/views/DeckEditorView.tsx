@@ -7,8 +7,12 @@ import { deckCheckQuery, deckEarmarksQuery, deckQuery, draftCombosQuery, printin
 import { useDebounced } from '../app/useDebounced';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { Button } from '../components/Button';
+import { Check } from '../components/controls/Check';
+import { Pressable } from '../components/controls/Pressable';
+import { TitleInput } from '../components/controls/Inputs';
+import { TextInput } from '../components/controls/TextField';
 import { CardInspector } from '../components/CardInspector';
-import { Chevron } from '../components/Chevron';
+import { Chevron } from '../components/icons/Chevron';
 import { DeckCombosBody } from '../components/Combos';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../components/States';
@@ -109,15 +113,14 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <h1 className="sr-only">Edit {detail.deck.name}</h1>
             <Link to="/decks" search={(s) => ({ ...s, deck: slug })} className="inline-flex items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
-              <Chevron dir="left" className="size-3.5" /> Back to deck
+              <Chevron dir="left" className="size-icon-xs" /> Back to deck
             </Link>
             <label className="sr-only" htmlFor="deck-name">Deck name</label>
-            <input
+            <TitleInput
               id="deck-name"
               value={name}
               maxLength={120}
               onChange={(e) => setName(e.target.value)}
-              className="-mx-1 min-w-0 rounded-sm border border-transparent bg-transparent px-1 text-3xl voice-condensed font-bold leading-tight text-ink hover:border-rule focus-visible:border-accent"
             />
           </div>
           <dl className="flex items-baseline gap-4 text-sm tabular">
@@ -181,7 +184,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
 
 function PaneTab({ value, children }: { value: string; children: ReactNode }) {
   return (
-    <Tabs.Trigger value={value} className="min-h-9 flex-1 cursor-pointer whitespace-nowrap bg-paper-raised px-3 text-sm voice-semi text-ink data-[state=active]:bg-accent data-[state=active]:text-on-accent">
+    <Tabs.Trigger value={value} className="min-h-control flex-1 cursor-pointer whitespace-nowrap bg-paper-raised px-3 text-sm voice-semi text-ink data-[state=active]:bg-accent data-[state=active]:text-on-accent">
       {children}
     </Tabs.Trigger>
   );
@@ -244,11 +247,11 @@ function DraftLine({ row, onEdit, onInspect }: { row: DraftRow; onEdit: (fn: (d:
         </span>
       </span>
       {delta !== 0 ? (
-        <span className={`shrink-0 text-xs voice-condensed font-bold uppercase tracking-[0.06em] ${delta > 0 ? 'text-accent-ink' : 'text-danger'}`}>
+        <span className={`shrink-0 text-xs voice-condensed font-bold uppercase tracking-caps ${delta > 0 ? 'text-accent-ink' : 'text-danger'}`}>
           {row.saved === 0 ? 'New' : removed ? 'Removed' : delta > 0 ? `+${delta}` : `−${-delta}`}
         </span>
       ) : row.origin && !removed && (
-        <span className="shrink-0 text-xs voice-condensed font-bold uppercase tracking-[0.06em] text-accent-ink" title={`Was ${row.origin.printing.set_code.toUpperCase()} #${row.origin.printing.collector_number}`}>New art</span>
+        <span className="shrink-0 text-xs voice-condensed font-bold uppercase tracking-caps text-accent-ink" title={`Was ${row.origin.printing.set_code.toUpperCase()} #${row.origin.printing.collector_number}`}>New art</span>
       )}
       <span className="w-14 shrink-0 text-right text-xs tabular text-ink-muted">{fmtUsd((row.finish === 'foil' ? p.price_usd_foil : p.price_usd) ?? p.price_usd_foil)}</span>
       <RowMenu row={row} onEdit={onEdit} />
@@ -258,9 +261,9 @@ function DraftLine({ row, onEdit, onInspect }: { row: DraftRow; onEdit: (fn: (d:
 
 function StepButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
-    <button type="button" aria-label={label} onClick={onClick} disabled={disabled} className="touch-hit grid size-7 cursor-pointer place-items-center text-md text-accent-ink hover:bg-paper-sunk disabled:cursor-not-allowed disabled:text-ink-muted disabled:hover:bg-transparent">
+    <Pressable aria-label={label} onClick={onClick} disabled={disabled} className="touch-hit grid size-7 place-items-center text-md text-accent-ink hover:bg-paper-sunk disabled:cursor-not-allowed disabled:text-ink-muted disabled:hover:bg-transparent">
       {children}
-    </button>
+    </Pressable>
   );
 }
 
@@ -274,7 +277,7 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
         <span aria-hidden="true" className="text-lg leading-none">⋯</span>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={4} collisionPadding={12} className="z-50 min-w-[12rem] rounded-sm border border-chrome-line bg-chrome-raised p-1 shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
+        <DropdownMenu.Content align="end" sideOffset={4} collisionPadding={12} className="z-50 min-w-[12rem] rounded-sm border border-chrome-line bg-chrome-raised p-1 shadow-popover">
           <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-xs voice-semi text-on-chrome-muted">Move to</DropdownMenu.Label>
           {MOVE_TO.map((b) => (
             <DropdownMenu.Item key={b} disabled={b === row.board} className={item} onSelect={() => onEdit((d) => moveCard(d, row.key, b))}>
@@ -371,14 +374,14 @@ function SearchTab({ inDeck, wantsCommander, onAdd, onInspect }: { inDeck: Set<s
     <>
       <label className="mx-sheet mt-3 flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
         {wantsCommander ? 'Search all cards — start with your commander' : 'Search all cards'}
-        <input
+        <TextInput
           type="search"
+          tone="paper"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="e.g. Sol Ring, Tifa…"
           autoComplete="off"
           spellCheck={false}
-          className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
         />
       </label>
       <p className="mx-sheet mt-1 text-xs text-ink-muted">Your unused cards are listed first.</p>
@@ -411,8 +414,8 @@ function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string
     <>
       <div className="mx-sheet mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="min-w-0 truncate text-ink-muted">EDHREC picks for <b className="text-ink">{res.data?.commander ?? commander}</b></span>
-        <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} className="accent-[var(--theme-accent)]" /> Only unused cards</label>
-        <label className="inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={hideInDeck} onChange={(e) => setHideInDeck(e.target.checked)} className="accent-[var(--theme-accent)]" /> Hide cards in deck</label>
+        <div className="ml-auto"><Check checked={freeOnly} onChange={setFreeOnly}>Only unused cards</Check></div>
+        <Check checked={hideInDeck} onChange={setHideInDeck}>Hide cards in deck</Check>
       </div>
       <ResultList empty={res.isPending ? null : 'No suggestions match.'} loading={res.isPending} error={res.isError ? (res.error as Error).message : null}>
         {cards.map((c) => (
@@ -464,12 +467,12 @@ function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Dr
       <p className="text-sm text-ink-muted">{d.rule}</p>
       {d.for_deck.length > 0 && (
         <section aria-label="For this deck" className="mt-3">
-          <h4 className="text-sm voice-condensed font-bold uppercase tracking-[0.04em] text-ink-muted">For this deck · {d.for_deck.length}</h4>
+          <h4 className="text-sm voice-condensed font-bold uppercase tracking-caps-tight text-ink-muted">For this deck · {d.for_deck.length}</h4>
           <ul>{d.for_deck.map(line)}</ul>
         </section>
       )}
       <section aria-label="Earmarked cards that fit" className="mt-3">
-        <h4 className="text-sm voice-condensed font-bold uppercase tracking-[0.04em] text-ink-muted">Fits this deck · {d.legal.length}</h4>
+        <h4 className="text-sm voice-condensed font-bold uppercase tracking-caps-tight text-ink-muted">Fits this deck · {d.legal.length}</h4>
         {d.legal.length ? <ul>{d.legal.map(line)}</ul> : <p className="py-2 text-sm text-ink-muted">None of your other earmarked cards fit this deck.</p>}
       </section>
       {d.hidden.length > 0 && (
@@ -511,11 +514,11 @@ function ResultLine({ p, inDeck, lead, note, warn, onAdd, onInspect, offerComman
         {warn && <span className="truncate text-xs text-danger">{warn}</span>}
       </span>
       {offerCommander && (
-        <button type="button" onClick={() => onAdd(p, 'commander')} className="shrink-0 cursor-pointer rounded-sm px-2 py-1 text-sm voice-semi text-accent-ink hover:bg-paper-sunk">
+        <Pressable onClick={() => onAdd(p, 'commander')} className="shrink-0 rounded-sm px-2 py-1 text-sm voice-semi text-accent-ink hover:bg-paper-sunk">
           As commander
-        </button>
+        </Pressable>
       )}
-      <button type="button" aria-label={`Add ${p.name}`} onClick={() => onAdd(p, 'main')} className="touch-hit grid size-9 shrink-0 cursor-pointer place-items-center rounded-sm text-xl text-accent-ink hover:bg-paper-sunk">+</button>
+      <Pressable aria-label={`Add ${p.name}`} onClick={() => onAdd(p, 'main')} className="touch-hit grid size-9 shrink-0 place-items-center rounded-sm text-xl text-accent-ink hover:bg-paper-sunk">+</Pressable>
     </li>
   );
 }
@@ -555,13 +558,12 @@ function SwapGroup({ title, lines, note, tone }: { title: string; lines: SwapLin
 /** The card name opens the inspector (bigger art, facts, your copies). */
 function CardName({ p, onInspect, struck = false }: { p: PrintingOut; onInspect: Inspect; struck?: boolean }) {
   return (
-    <button
-      type="button"
+    <Pressable
       onClick={() => onInspect(p)}
-      className={`min-w-0 cursor-pointer self-start truncate text-left text-md voice-semi font-medium text-ink underline-offset-4 decoration-rule-strong hover:underline focus-visible:underline ${struck ? 'line-through' : ''}`}
+      className={`min-w-0 self-start truncate text-left text-md voice-semi font-medium text-ink underline-offset-4 decoration-rule-strong hover:underline focus-visible:underline ${struck ? 'line-through' : ''}`}
     >
       {p.name}
-    </button>
+    </Pressable>
   );
 }
 
@@ -595,7 +597,7 @@ function DeckChecks({ slug, draft }: { slug: string; draft: Draft }) {
             )}
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content align="end" sideOffset={6} collisionPadding={12} className="z-50 flex max-h-[70dvh] w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-y-auto rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
+            <Popover.Content align="end" sideOffset={6} collisionPadding={12} className="z-50 flex max-h-[70dvh] w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-y-auto rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-popover">
               {!r ? <p className="text-on-chrome-muted">Checking…</p> : (
                 <>
                   <section className="flex flex-col gap-1">
@@ -620,7 +622,7 @@ function DeckChecks({ slug, draft }: { slug: string; draft: Draft }) {
                       {b.extra_turns.length > 0 && <p>Extra turns: {b.extra_turns.join(', ')}</p>}
                       {combos
                         ? <p className="text-on-chrome-muted">{b.spellbook_available ? `Two-card combos: ${b.two_card_combos}` : 'Commander Spellbook didn’t answer; combos not counted.'}</p>
-                        : <button type="button" onClick={() => setCombos(true)} className="self-start cursor-pointer text-accent underline-offset-4 hover:underline">Also check two-card combos</button>}
+                        : <Pressable onClick={() => setCombos(true)} className="self-start text-accent underline-offset-4 hover:underline">Also check two-card combos</Pressable>}
                     </section>
                   )}
                 </>

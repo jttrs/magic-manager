@@ -15,7 +15,7 @@ import { ChipToggles, Segmented, SideSection, TextField } from '../components/Si
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
-import { ImportDeckMark, NewDeckMark, RereadMark } from '../components/StoreMarks';
+import { ImportDeckMark, NewDeckMark, RereadMark } from '../components/icons/marks';
 import { jumpstartBuyList } from '../core/api';
 import { DECK_GROUP_LABEL, DECK_GROUPS, effectiveTypes, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, typesToSearch, unreadCount, unreadInSet, type DeckGroupBy } from '../core/decks';
 import { fmtCount, fmtInt } from '../core/format';

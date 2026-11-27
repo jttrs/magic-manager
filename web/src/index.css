@@ -59,6 +59,43 @@
   --radius-pill: var(--radius-pill);
 
   --ease-out: var(--motion-ease-out);
+
+  /* Named sizes (size-icon-md, min-h-control, size-icon-box …). */
+  --spacing-icon-xs: var(--size-icon-xs);
+  --spacing-icon-sm: var(--size-icon-sm);
+  --spacing-icon-md: var(--size-icon-md);
+  --spacing-icon-lg: var(--size-icon-lg);
+  --spacing-icon-box: var(--size-icon-box);
+  --spacing-control: var(--size-control);
+  --spacing-control-coarse: var(--size-control-coarse);
+  --spacing-underline: var(--size-underline);
+  --spacing-underline-quiet: var(--size-underline-quiet);
+  --spacing-bar: var(--size-bar);
+
+  /* Uppercase-label letter spacing (tracking-caps …). */
+  --tracking-caps: var(--tracking-caps);
+  --tracking-caps-tight: var(--tracking-caps-tight);
+  --tracking-caps-wide: var(--tracking-caps-wide);
+
+  /* Reading widths and dialog widths (max-w-measure-body, w-dialog-md …). */
+  --container-measure-narrow: var(--measure-narrow);
+  --container-measure-body: var(--measure-body);
+  --container-measure-wide: var(--measure-wide);
+  --container-dialog-sm: var(--dialog-sm);
+  --container-dialog-md: var(--dialog-md);
+  --container-dialog-lg: var(--dialog-lg);
+
+  /* A Magic card's face and corner (aspect-card, rounded-card). */
+  --aspect-card: var(--card-aspect);
+  --radius-card: var(--card-radius);
+
+  /* Elevation: menus/popovers/tooltips, and dialogs. */
+  --shadow-popover: 0 12px 28px -12px var(--theme-scrim);
+  --shadow-dialog: 0 24px 60px -24px var(--theme-scrim);
+
+  /* A pressed icon toggle (distinct from the hover fill). */
+  --color-pressed: var(--theme-pressed);
+  --color-chrome-pressed: var(--theme-chrome-pressed);
 }
 
 @layer base {
@@ -189,6 +226,43 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* Shared-control DEFAULTS that a caller may override live in the components layer,
+   below every utility: a class passed to <Pressable>/<ListRow> (a fill, alignment,
+   padding) always wins, whatever Tailwind's utility order. */
+@layer components {
+  .pressable {
+    cursor: pointer;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+  }
+
+  .pressable:disabled {
+    cursor: not-allowed;
+  }
+
+  .list-row {
+    display: flex;
+    width: 100%;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--theme-rule);
+    padding-inline: 0.25rem;
+    text-align: left;
+    transition-property: background-color;
+    transition-timing-function: var(--motion-ease-out);
+  }
+
+  .list-row:hover {
+    background: var(--theme-paper-sunk);
+  }
+
+  .list-row[aria-current='true'] {
+    background: var(--theme-highlight);
+  }
+}
+
 /* The highlighter: a translucent stroke laid behind text/captions, slightly
    ragged at the ends like a real marker pass. */
 @utility highlighter {
@@ -252,6 +326,7 @@
   --theme-paper-raised: var(--theme-chrome-raised);
   --theme-paper-sunk: var(--theme-chrome-raised);
   --theme-accent-ink: var(--theme-accent);
+  --theme-pressed: var(--theme-chrome-pressed);
 }
 
 /* Tooltips only label things: never let one (or Radix's positioning wrapper around it) catch a

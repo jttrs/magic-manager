@@ -6,6 +6,7 @@ import { DEFAULT_BUILDABLE_SHORT } from '../core/decks';
 import { fmtCount } from '../core/format';
 import { createLocalPref } from './localPref';
 import { useSettingsSection } from './settings';
+import { RangeInput } from '../components/controls/Inputs';
 
 const MAX = 10;
 
@@ -33,17 +34,7 @@ export function useDecksSettings() {
         description={short === 0 ? 'A recipe is Buildable only when every card is in your unused cards.' : `A recipe you haven’t built counts as Buildable when your unused cards leave it ${fmtCount(short, 'card')} or fewer short.`}
         control={({ labelId, descriptionId }) => (
           <div className="flex items-center gap-3 sm:min-w-[15rem]">
-            <input
-              type="range"
-              min={0}
-              max={MAX}
-              step={1}
-              value={short}
-              aria-labelledby={labelId}
-              aria-describedby={descriptionId}
-              onChange={(e) => pref.set(Number(e.target.value))}
-              className="min-w-0 flex-1 accent-[var(--theme-accent)]"
-            />
+            <RangeInput min={0} max={MAX} value={short} aria-labelledby={labelId} aria-describedby={descriptionId} onChange={pref.set} />
             <span className="w-6 text-right tabular text-sm">{short}</span>
           </div>
         )}

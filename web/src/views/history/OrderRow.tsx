@@ -1,3 +1,4 @@
+import { ListRow } from '../../components/controls/ListRow';
 import type { PurchaseOut, TotalsOut } from '../../core/api';
 import { fmtCount, fmtUsd } from '../../core/format';
 import { KIND_LABEL, orderTitle } from '../../core/history';
@@ -44,14 +45,13 @@ type RowProps = { p: PurchaseOut; rowKey: string; active: boolean; tabbable: boo
 /** A store order in the timeline or under Needs review: store + order number, status, Paid / Worth / gain. */
 export function OrderRow({ p, rowKey, active, tabbable, onFocus, onPick }: RowProps) {
   return (
-    <button
-      type="button"
+    <ListRow
       data-row={rowKey}
       tabIndex={tabbable ? 0 : -1}
       onFocus={onFocus}
       onClick={() => onPick(p.purchase_id)}
-      aria-current={active ? 'true' : undefined}
-      className={`ruled flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`}
+      active={active}
+      className="py-2"
     >
       <time dateTime={p.ordered_at} className="w-12 shrink-0 text-xs tabular text-ink-muted">{orderDay(p.ordered_at)}</time>
       <span className="flex min-w-0 flex-1 flex-col">
@@ -63,6 +63,6 @@ export function OrderRow({ p, rowKey, active, tabbable, onFocus, onPick }: RowPr
         <span className="text-right text-ink-muted">Worth</span><span className="text-right text-ink"><Valued p={p} field="worth" /></span>
         <span className="text-right text-ink-muted">Gain</span><span className="text-right"><Valued p={p} field="gain" /></span>
       </span>
-    </button>
+    </ListRow>
   );
 }

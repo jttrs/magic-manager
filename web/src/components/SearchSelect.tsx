@@ -1,4 +1,9 @@
 import { Popover } from 'radix-ui';
+import { CaretMark } from './icons/marks';
+import { RailField } from './controls/RailField';
+import { TextInput } from './controls/TextField';
+import { triggerClass } from './controls/fieldClass';
+import { menuPanelClass } from './controls/surfaces';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 type Option = { value: string; label: string; hint?: string };
@@ -34,28 +39,24 @@ export function SearchSelect({ label, options, value, onChange, noun, nouns = `$
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1.5">
-        <span id={`${id}-l`} className={hideLabel ? 'sr-only' : `text-sm voice-semi ${paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`}>{label}</span>
-        {labelExtra}
-      </span>
+    <RailField label={label} labelId={`${id}-l`} extra={labelExtra} tone={paper ? 'paper' : 'chrome'} hideLabel={hideLabel}>
       <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(''); else setActive(Math.max(0, options.findIndex((x) => x.value === value))); }}>
         <Popover.Trigger
           aria-labelledby={`${id}-l ${id}-s`}
-          className={`flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border px-2.5 text-left text-md transition-colors ease-guide data-[state=open]:border-accent pointer-coarse:min-h-11 ${paper ? 'border-rule-strong bg-paper text-ink hover:border-ink-muted sm:min-w-[15rem]' : 'border-chrome-line bg-chrome-raised text-on-chrome hover:border-on-chrome-muted'}`}
+          className={`${triggerClass(paper ? 'paper' : 'chrome')} ${paper ? 'sm:min-w-[15rem]' : ''}`}
         >
           <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${current ? '' : paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`}>{current?.label ?? `Choose a ${noun}…`}</span>
-          <span aria-hidden="true" className={paper ? 'text-ink-muted' : 'text-on-chrome-muted'}>▾</span>
+          <CaretMark className={`size-icon-sm ${paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`} />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
             align="start"
             sideOffset={4}
             collisionPadding={12}
-            className={`${paper ? 'z-[60]' : 'z-50'} flex max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]`}
+            className={`flex max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col ${menuPanelClass}`}
           >
             <div className="border-b border-chrome-line p-2">
-              <input
+              <TextInput
                 type="search"
                 role="combobox"
                 aria-expanded="true"
@@ -68,7 +69,6 @@ export function SearchSelect({ label, options, value, onChange, noun, nouns = `$
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setActive(0); }}
                 onKeyDown={onKey}
-                className="min-h-8 w-full rounded-sm border border-chrome-line bg-chrome px-2 text-sm text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
               />
             </div>
             <ul ref={listRef} id={`${id}-list`} role="listbox" aria-label={label} className="min-h-0 overflow-y-auto overscroll-contain py-1">
@@ -92,6 +92,6 @@ export function SearchSelect({ label, options, value, onChange, noun, nouns = `$
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-    </div>
+    </RailField>
   );
 }

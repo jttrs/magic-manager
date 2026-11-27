@@ -1,6 +1,7 @@
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
 import { useCallback, useMemo, useRef } from 'react';
 import { useRovingFocus } from '../../app/useRovingFocus';
+import { ListRow } from '../../components/controls/ListRow';
 import { EmptyNote } from '../../components/States';
 import type { RecipeOut } from '../../core/api';
 import { coverage, readiness, SOURCE_LABEL, ownershipLabel, type DeckGroup } from '../../core/decks';
@@ -94,7 +95,7 @@ export function RecipeList({ groups, total, active, threshold, onPick }: { group
 /** Where the recipe comes from, printed like a guide's product code: hairline, no fill, never amber. */
 export function SourceMark({ origin }: { origin: RecipeOut['origin'] }) {
   return (
-    <span className="shrink-0 rounded-xs border border-rule px-1 text-2xs leading-[1.15rem] voice-condensed font-medium uppercase tracking-[0.08em] text-ink-muted">
+    <span className="shrink-0 rounded-xs border border-rule px-1 text-2xs leading-[1.15rem] voice-condensed font-medium uppercase tracking-caps-wide text-ink-muted">
       {SOURCE_LABEL[origin]}
     </span>
   );
@@ -103,21 +104,20 @@ export function SourceMark({ origin }: { origin: RecipeOut['origin'] }) {
 /** What you own of it: built copies in accent ink, loose / not built in ink, not owned muted. */
 function OwnMark({ r }: { r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'origin'> }) {
   const tone = r.ownership === 'built' ? 'text-accent-ink' : r.ownership === 'loose' ? 'text-ink' : 'text-ink-muted';
-  return <span className={`shrink-0 text-xs voice-condensed uppercase tracking-[0.06em] ${tone}`}>{ownershipLabel(r)}</span>;
+  return <span className={`shrink-0 text-xs voice-condensed uppercase tracking-caps ${tone}`}>{ownershipLabel(r)}</span>;
 }
 
 function RecipeRow({ r, threshold, active, tabbable, onFocus, onPick }: { r: RecipeOut; threshold: number; active: boolean; tabbable: boolean; onFocus: () => void; onPick: () => void }) {
   const cover = coverage(r, threshold);
   const unowned = r.ownership === 'none';
   return (
-    <button
-      type="button"
+    <ListRow
       data-recipe={r.key}
       tabIndex={tabbable ? 0 : -1}
       onFocus={onFocus}
       onClick={onPick}
-      aria-current={active ? 'true' : undefined}
-      className={`ruled flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`}
+      active={active}
+      className="py-2"
     >
       {r.image_uri ? (
         <img src={crop(r.image_uri)} alt="" loading="lazy" decoding="async" className={`size-10 shrink-0 rounded-xs object-cover ${unowned ? 'opacity-55 grayscale' : ''}`} />
@@ -138,6 +138,6 @@ function RecipeRow({ r, threshold, active, tabbable, onFocus, onPick }: { r: Rec
         {r.read ? <span className="text-ink">{fmtUsd(r.value_usd)}</span> : <span className="text-ink-muted" title="Open it to read its card list">not read</span>}
         {cover && <span className={readiness(r, threshold) === 'far' ? 'text-ink-muted' : 'voice-semi text-accent-ink'}>{cover}</span>}
       </span>
-    </button>
+    </ListRow>
   );
 }

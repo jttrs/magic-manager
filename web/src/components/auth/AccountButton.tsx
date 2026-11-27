@@ -1,21 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Popover } from 'radix-ui';
-import { useState, type SVGProps } from 'react';
+import { useState } from 'react';
 import { meQuery, signOut } from '../../app/auth';
 import { serverModeQuery } from '../../app/queries';
 import { Button } from '../Button';
 import { buttonClass } from '../buttonClass';
 import { IconAction } from '../IconAction';
-
-function PersonIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" {...props}>
-      <circle cx="8" cy="5.4" r="2.9" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M2.6 14.2c.6-2.9 2.8-4.5 5.4-4.5s4.8 1.6 5.4 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
+import { PersonMark } from '../icons/marks';
 
 /** Hosted mode: who's signed in and Sign out, behind one quiet masthead mark. Local mode: nothing. */
 export function AccountButton() {
@@ -29,7 +21,7 @@ export function AccountButton() {
   return (
     <Popover.Root onOpenChange={() => setError(null)}>
       <Popover.Trigger asChild>
-        <IconAction label={label} Icon={PersonIcon} tone="chrome" />
+        <IconAction label={label} Icon={PersonMark} tone="chrome" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
@@ -37,7 +29,7 @@ export function AccountButton() {
           sideOffset={6}
           collisionPadding={12}
           aria-label="Your account"
-          className="z-50 flex w-[min(18rem,calc(100vw-1.5rem))] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+          className="z-50 flex w-[min(18rem,calc(100vw-1.5rem))] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-popover"
         >
           <p className="m-0 flex min-w-0 flex-col gap-0.5">
             <span className="truncate text-md voice-semi font-medium">{user.display_name}</span>

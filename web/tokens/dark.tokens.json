@@ -21,6 +21,8 @@
     "danger": { "$value": "{color.rust.400}" },
     "focus": { "$value": "{color.amber.400}" },
     "scrim": { "$value": "#100d09cc" },
+    "pressed": { "$value": "{color.charcoal.900}", "$description": "A pressed icon toggle on paper (distinct from the hover fill, paper-sunk)." },
+    "chrome-pressed": { "$value": "{color.charcoal.800}", "$description": "A pressed icon toggle on chrome." },
     "scrollbar-chrome": { "$value": "{color.charcoal.600}" },
     "scrollbar-chrome-hover": { "$value": "{color.taupe.500}" },
     "scrollbar-paper": { "$value": "{color.charcoal.600}" },

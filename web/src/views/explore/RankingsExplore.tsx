@@ -18,10 +18,13 @@ import { InfoTip } from '../../components/InfoTip';
 import { MarkToggle } from '../../components/MarkToggle';
 import { ProgressRule } from '../../components/ProgressRule';
 import { SearchSelect } from '../../components/SearchSelect';
+import { Pressable } from '../../components/controls/Pressable';
+import { RailField } from '../../components/controls/RailField';
+import { TextInput } from '../../components/controls/TextField';
 import { Segmented, SideSection, TextField } from '../../components/Sidebar';
 import { ViewToggle } from '../../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
-import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
+import { EdhrecMark, RereadMark } from '../../components/icons/marks';
 import { VirtualGuide } from '../../components/VirtualGuide';
 import { EdhrecHealth } from '../../components/EdhrecHealth';
 import type { RankedOut, RankingOut } from '../../core/api';
@@ -237,9 +240,9 @@ function TagField({ value, suggestions, onCommit }: { value: string; suggestions
   const [draft, setDraft] = useState(value);
   const commit = () => draft.trim() !== value && onCommit(draft.trim());
   return (
-    <label className="flex flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
-      Tag or creature type
-      <input
+    <RailField label="Tag or creature type" htmlFor={`${id}-tag`}>
+      <TextInput
+        id={`${id}-tag`}
         name="tag"
         type="search"
         list={`${id}-tags`}
@@ -250,12 +253,11 @@ function TagField({ value, suggestions, onCommit }: { value: string; suggestions
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => e.key === 'Enter' && commit()}
-        className="min-h-9 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
       />
       <datalist id={`${id}-tags`}>
         {suggestions.map((t) => <option key={t} value={t} />)}
       </datalist>
-    </label>
+    </RailField>
   );
 }
 
@@ -297,9 +299,9 @@ function RankingList({ r, rows, cards, selected, onToggle, onInspect, footer }: 
                 <td className="py-0.5"><MarkToggle name={x.name} marked={on} onToggle={() => onToggle(c.key)} size="sm" /></td>
                 <td className="pr-2 text-right text-ink-muted">{x.rank ?? '—'}</td>
                 <td className="hidden py-1 @[22rem]:table-cell">
-                  <button type="button" onClick={() => onInspect(c)} aria-label={`Inspect ${x.name}`} className="block size-[var(--size-thumb)] cursor-pointer overflow-hidden rounded-xs">
+                  <Pressable onClick={() => onInspect(c)} aria-label={`Inspect ${x.name}`} className="block size-[var(--size-thumb)] overflow-hidden rounded-xs">
                     <CardArt card={c} crop />
-                  </button>
+                  </Pressable>
                 </td>
                 <th scope="row" className="py-1 pl-1 text-left font-normal">
                   <CardHover card={c}>

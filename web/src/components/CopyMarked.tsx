@@ -1,7 +1,7 @@
 import { IconTooltip } from './IconTooltip';
 import { iconActionClass } from './iconActionClass';
 import { useCopy, type GetText } from './useCopy';
-import { CopyListMark } from './StoreMarks';
+import { CheckMark, CloseMark, CopyListMark } from './icons/marks';
 import { copyMarkedLabel, copyMarkedTip, markBadge } from '../core/marks';
 
 export type MarkedCopy = { count: number; getText: GetText; onClear?: () => void; noun?: string };
@@ -40,11 +40,9 @@ export function CopyMarked({ count, getText, onClear, noun = 'card' }: MarkedCop
           className={iconActionClass('paper')}
         >
           {copied ? (
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-[1.35rem]">
-              <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <CheckMark className="size-icon-lg" />
           ) : (
-            <CopyListMark className="size-[1.35rem]" />
+            <CopyListMark className="size-icon-lg" />
           )}
           {!none && (
             <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-pill bg-accent px-1 text-2xs font-bold leading-none tabular text-on-accent">
@@ -61,9 +59,7 @@ export function CopyMarked({ count, getText, onClear, noun = 'card' }: MarkedCop
             onClick={onClear}
             className="touch-hit grid size-6 cursor-pointer place-items-center rounded-sm text-ink-muted transition-colors duration-150 ease-guide hover:bg-paper-sunk hover:text-ink focus-visible:bg-paper-sunk focus-visible:text-ink"
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3">
-              <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
+            <CloseMark className="size-3" />
           </button>
         </IconTooltip>
       )}

@@ -5,6 +5,7 @@ import { useSettingsSection } from '../../app/settings';
 import { putPref, putVariantKind, type PrefOut, type PrefsOut, type VariantKindOut, type VariantKindsOut } from '../../core/api';
 import { canToggleOff, kindValue, predict, predictKind, toggleMulti } from '../../core/collectionPrefs';
 import { FailureNote } from '../companion/CompanionNotes';
+import { Button } from '../Button';
 import FamilyRulesSettings from './FamilyRulesSettings';
 import { SettingsChoice, SettingsMultiChoice, SettingsRow } from './SettingsControls';
 
@@ -130,15 +131,16 @@ function PrefRow({ row, busy, onChange }: { row: PrefOut; busy: boolean; onChang
             />
           )}
           {row.changed && (
-            <button
-              type="button"
+            <Button
+              tone="paper"
+              emphasis="link"
               disabled={busy}
               aria-label={`Reset ${row.title} to its default`}
               onClick={() => onChange(null)}
-              className="min-h-6 cursor-pointer text-sm text-ink-muted underline hover:text-ink disabled:cursor-not-allowed pointer-coarse:min-h-11"
+              className="touch-hit text-sm"
             >
               Reset
-            </button>
+            </Button>
           )}
         </div>
       )}

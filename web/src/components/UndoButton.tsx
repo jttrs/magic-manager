@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type SVGProps } from 'react';
+import { useState } from 'react';
 import { undoQuery, unwrap } from '../app/queries';
 import { undoRestore } from '../core/api';
 import { changeLines, detailLines, whenLabel } from '../core/undo';
 import { ConfirmDialog } from './ConfirmDialog';
 import { IconAction } from './IconAction';
+import { UndoMark } from './icons/marks';
 
 /** The one restore point: a quiet header icon once one exists (taken before the
  *  first change of each session); confirming swaps your data with it. */
@@ -20,7 +21,7 @@ export function UndoButton() {
   const label = `Restore point · ${when}`;
   return (
     <>
-      <IconAction label={label} Icon={UndoIcon} tone="chrome" onClick={() => { void q.refetch(); setOpen(true); }} />
+      <IconAction label={label} Icon={UndoMark} tone="chrome" onClick={() => { void q.refetch(); setOpen(true); }} />
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}
@@ -53,14 +54,5 @@ export function UndoButton() {
         </div>
       </ConfirmDialog>
     </>
-  );
-}
-
-function UndoIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" {...props}>
-      <path d="M3.5 6.5h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 3.5 3 6.5l3 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

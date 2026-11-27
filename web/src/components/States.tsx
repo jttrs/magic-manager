@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { SheetHeaderSlots } from './sheetHeaderSlots';
 import { SheetSummarySlot } from './SheetSummary';
 import { ApiError } from '../core/apiError';
+import { Button } from './Button';
 import { CopyMarked, type MarkedCopy } from './CopyMarked';
 
 /**
@@ -88,7 +89,7 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, arra
 
 export function EmptyNote({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="mx-auto mt-[12vh] max-w-[46ch] px-6 text-center">
+    <div className="mx-auto mt-[12vh] max-w-measure-narrow px-6 text-center">
       <p className="text-2xl voice-condensed font-bold text-ink">{title}</p>
       {children && <div className="mt-2 text-md leading-relaxed text-ink-muted">{children}</div>}
     </div>
@@ -98,7 +99,7 @@ export function EmptyNote({ title, children }: { title: string; children?: React
 export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const msg = error instanceof Error ? error.message : String(error);
   return (
-    <div role="alert" className="mx-auto mt-[12vh] max-w-[52ch] px-6 text-center">
+    <div role="alert" className="mx-auto mt-[12vh] max-w-measure-narrow px-6 text-center">
       <p className="text-2xl voice-condensed font-bold text-danger">Couldn’t load this sheet</p>
       <p className="mt-2 text-md text-ink">{msg}</p>
       {error instanceof ApiError && error.ref && !msg.includes(error.ref) && (
@@ -107,9 +108,9 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
         </p>
       )}
       {onRetry && (
-        <button type="button" onClick={onRetry} className="mt-4 cursor-pointer rounded-sm border border-rule px-3 py-1.5 text-sm voice-semi text-ink hover:border-rule-strong">
+        <Button tone="paper" onClick={onRetry} className="mt-4">
           Try again
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -121,7 +122,7 @@ export function GridSkeleton({ label }: { label: string }) {
     <div role="status" aria-live="polite" className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-3 px-sheet pt-4" aria-label={label}>
       <span className="sr-only">{label}</span>
       {Array.from({ length: 18 }, (_, i) => (
-        <span key={i} className="aspect-[488/680] animate-pulse rounded-sm bg-paper-sunk" />
+        <span key={i} className="aspect-card animate-pulse rounded-sm bg-paper-sunk" />
       ))}
     </div>
   );

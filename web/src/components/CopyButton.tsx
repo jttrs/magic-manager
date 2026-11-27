@@ -1,6 +1,7 @@
 import { Popover } from 'radix-ui';
 import { useState, type ComponentType, type SVGProps } from 'react';
 import { Button } from './Button';
+import { CheckMark } from './icons/marks';
 import { useCopy, type GetText } from './useCopy';
 
 /** The copy result. Always mounted (a live region must exist before it
@@ -56,13 +57,11 @@ export function CopyTargets({ targets, describe }: { targets: readonly CopyTarge
                     className="group relative flex h-8 min-w-0 flex-auto cursor-pointer items-center justify-center gap-1.5 px-2 text-accent transition-colors duration-200 ease-guide hover:bg-chrome focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-wait"
                   >
                     {state === 'done' ? (
-                      <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                        <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <CheckMark className="size-icon-sm" />
                     ) : (
-                      <Mark className="size-[1.125rem] shrink-0 group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
+                      <Mark className="size-icon-md shrink-0 group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
                     )}
-                    <span className="hidden truncate text-xs voice-condensed font-medium uppercase tracking-[0.06em] text-on-chrome @[21.5rem]:inline">{name}</span>
+                    <span className="hidden truncate text-xs voice-condensed font-medium uppercase tracking-caps text-on-chrome @[21.5rem]:inline">{name}</span>
                   </button>
                 </Popover.Anchor>
                 <Popover.Portal>
@@ -72,7 +71,7 @@ export function CopyTargets({ targets, describe }: { targets: readonly CopyTarge
                     collisionPadding={12}
                     onOpenAutoFocus={(e) => e.preventDefault()}
                     onCloseAutoFocus={(e) => e.preventDefault()}
-                    className={`z-50 max-w-[16rem] rounded-sm border bg-chrome-raised px-2.5 py-1.5 text-sm leading-snug text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)] focus:outline-none ${failed ? 'border-danger' : 'border-chrome-line'}`}
+                    className={`z-50 max-w-[16rem] rounded-sm border bg-chrome-raised px-2.5 py-1.5 text-sm leading-snug text-on-chrome shadow-popover focus:outline-none ${failed ? 'border-danger' : 'border-chrome-line'}`}
                   >
                     {text}
                   </Popover.Content>

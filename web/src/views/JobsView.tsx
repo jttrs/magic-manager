@@ -5,6 +5,8 @@ import { jobsQuery } from '../app/queries';
 import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
 import { Button } from '../components/Button';
+import { Check } from '../components/controls/Check';
+import { Pressable } from '../components/controls/Pressable';
 import { SideSection, TextField } from '../components/Sidebar';
 import { EmptyNote, GuideSheet } from '../components/States';
 import { fmtInt } from '../core/format';
@@ -54,10 +56,9 @@ export function JobsView() {
         <p className="text-sm leading-relaxed text-on-chrome-muted">Fetch EDHREC pages for every card in the given set families so compares load instantly.</p>
         <TextField name="families" label="Set families" value={families} placeholder="fin, msh, tla…" onChange={setFamilies} />
         <TextField name="card_type" label="Type filter" value={cardType} placeholder="legendary creature…" onChange={setCardType} />
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-on-chrome">
-          <input type="checkbox" checked={resume} onChange={(e) => setResume(e.target.checked)} className="h-4 w-4 accent-[var(--theme-accent)]" />
-          Skip cards already cached
-        </label>
+        <div className="text-sm text-on-chrome">
+          <Check checked={resume} onChange={setResume}>Skip cards already cached</Check>
+        </div>
         <Button type="submit" emphasis="primary" disabled={submitting || !warmOk}>{submitting ? 'Starting…' : 'Start warm-up'}</Button>
         {!warmOk && <p className="text-sm text-on-chrome-muted">{ADMIN_JOB_NOTE}</p>}
         <p id="job-form-error" role="alert" className="min-h-4 text-sm text-danger">{formError}</p>
@@ -107,13 +108,13 @@ export function JobsView() {
               <ul className="mt-2">
                 {jobs.data.map((j) => (
                   <li key={j.id} className="ruled">
-                    <button type="button" onClick={() => follow(j.id)} className="flex w-full cursor-pointer flex-col gap-0.5 py-2 text-left hover:bg-paper-sunk">
+                    <Pressable onClick={() => follow(j.id)} className="flex w-full flex-col gap-0.5 py-2 hover:bg-paper-sunk">
                       <span className="flex items-baseline gap-2 text-md">
                         <span className="voice-semi font-medium">{j.title}</span>
                         <span className="ml-auto text-xs capitalize text-ink-muted">{j.status}</span>
                       </span>
                       <span className="text-xs tabular text-ink-muted">{j.summary ?? j.error ?? new Date(j.created_at).toLocaleString()}</span>
-                    </button>
+                    </Pressable>
                   </li>
                 ))}
               </ul>

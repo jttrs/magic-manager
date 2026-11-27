@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DeckLineOut } from '../../core/api';
+import { Pressable } from '../../components/controls/Pressable';
 import { fmtInt, fmtUsd } from '../../core/format';
 
 type Unit = 'exact' | 'floor';
@@ -40,15 +41,15 @@ export function CardLines({ title, lines, unitBasis, worth = false, labels = DEC
   const th = (key: Unit, text: string, cls: string) => (
     <th scope="col" aria-sort={sortable && sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined} className={`${cls} py-1.5 pl-3 text-right font-medium`}>
       {sortable ? (
-        <button type="button" onClick={() => toggle(key)} className="cursor-pointer voice-semi hover:text-ink">
+        <Pressable onClick={() => toggle(key)} className="voice-semi hover:text-ink">
           {text}{sort.key === key ? (sort.dir === 1 ? ' ↑' : ' ↓') : ''}
-        </button>
+        </Pressable>
       ) : text}
     </th>
   );
   return (
     <table className="w-full border-collapse text-sm tabular">
-      <caption className="pb-1 text-left text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
+      <caption className="pb-1 text-left text-sm voice-condensed font-medium uppercase tracking-caps text-ink-muted">
         {title} · {fmtInt(count)}
         {unitBasis && <span className="normal-case tracking-normal"> · {worth ? `worth ${fmtUsd(total)}` : fmtUsd(total)}</span>}
       </caption>

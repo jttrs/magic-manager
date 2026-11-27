@@ -8,12 +8,14 @@ import { useSelection } from '../app/selection';
 import { useRovingFocus } from '../app/useRovingFocus';
 import { ViewLayout } from '../components/AppShell';
 import { Button } from '../components/Button';
-import { Chevron } from '../components/Chevron';
+import { ListRow } from '../components/controls/ListRow';
+import { Pressable } from '../components/controls/Pressable';
+import { Chevron } from '../components/icons/Chevron';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
 import { IconAction } from '../components/IconAction';
 import { DateField, SideSection, TextField } from '../components/Sidebar';
-import { FindProductsMark, ReadOrdersMark } from '../components/StoreMarks';
+import { FindProductsMark, ReadOrdersMark } from '../components/icons/marks';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide } from '../components/VirtualGuide';
@@ -96,9 +98,9 @@ export function HistoryView() {
         <DateField name="from" label="From" value={search.from} min={first} max={search.to ?? last} onChange={(from) => set({ from })} />
         <DateField name="to" label="To" value={search.to} min={search.from ?? first} max={last} onChange={(to) => set({ to })} />
         {filtered && (
-          <button type="button" onClick={() => set({ q: '', kinds: [], from: undefined, to: undefined })} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
+          <Button emphasis="link" onClick={() => set({ q: '', kinds: [], from: undefined, to: undefined })} className="self-start text-sm">
             Clear filters
-          </button>
+          </Button>
         )}
       </SideSection>
     </>
@@ -213,12 +215,10 @@ function Row({ row, order, active, current, tabbable, onFocus, onEntry, onOrder 
   return <EntryRow e={e} order={order} rowKey={row.key} active={current} tabbable={tabbable} onFocus={onFocus} onPick={onEntry} />;
 }
 
-const rowClass = (active: boolean) => `ruled flex w-full cursor-pointer items-center gap-3 px-1 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`;
-
 function EntryRow({ e, order, rowKey, active, tabbable, onFocus, onPick }: { e: HistoryEntryOut; order?: PurchaseOut; rowKey: string; active: boolean; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void }) {
   const sub = [KIND_LABEL[e.kind], order && STATUS_LABEL[order.status], e.set_code?.toUpperCase(), e.detail && e.detail !== e.product ? e.detail : null].filter(Boolean).join(' · ');
   return (
-    <button type="button" data-row={rowKey} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => onPick(e.ingest_id)} aria-current={active ? 'true' : undefined} className={`${rowClass(active)} py-2`}>
+    <ListRow data-row={rowKey} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => onPick(e.ingest_id)} active={active} className="py-2">
       <time dateTime={e.at} className="w-12 shrink-0 text-xs tabular text-ink-muted">{dayLabel(e.at)}</time>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={`truncate text-md voice-semi font-medium ${e.kind === 'unknown' ? 'text-ink-muted' : 'text-ink'}`}>{e.title}</span>
@@ -241,18 +241,18 @@ function EntryRow({ e, order, rowKey, active, tabbable, onFocus, onPick }: { e: 
           <span className="text-ink-muted" title="Recorded before the ledger: its copies are counted in “Checklists before the ledger”.">{fmtCount(e.lines, 'row')}</span>
         )}
       </span>
-    </button>
+    </ListRow>
   );
 }
 
 /** A deck move: quieter than an acquisition — nothing new was owned. */
 function MoveLine({ e, rowKey, active, tabbable, onFocus, onPick, nested = false }: { e: HistoryEntryOut; rowKey: string; active: boolean; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void; nested?: boolean }) {
   return (
-    <button type="button" data-row={rowKey} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => onPick(e.ingest_id)} aria-current={active ? 'true' : undefined} className={`${rowClass(active)} py-1`}>
+    <ListRow data-row={rowKey} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => onPick(e.ingest_id)} active={active} className="py-1">
       <span className="w-12 shrink-0 text-xs tabular text-ink-muted">{nested ? '' : <time dateTime={e.at}>{dayLabel(e.at)}</time>}</span>
       <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">{e.title}</span>
       <span className="shrink-0 text-xs tabular text-ink-muted">{fmtCount(e.lines, 'line')}</span>
-    </button>
+    </ListRow>
   );
 }
 
@@ -262,11 +262,11 @@ function MovesRun({ row, active, tabbable, onFocus, onPick }: { row: Extract<Tim
   const id = `run-${row.key}`;
   return (
     <>
-      <button type="button" data-row={row.key} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={id} className={`${rowClass(false)} py-1`}>
+      <ListRow data-row={row.key} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={id} className="py-1">
         <time dateTime={row.entries[0].at} className="w-12 shrink-0 text-xs tabular text-ink-muted">{dayLabel(row.entries[0].at)}</time>
         <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">{movesSummary(row.entries)}</span>
-        <Chevron dir={open ? 'up' : 'down'} className="size-3.5 shrink-0 text-ink-muted" />
-      </button>
+        <Chevron dir={open ? 'up' : 'down'} className="size-icon-xs shrink-0 text-ink-muted" />
+      </ListRow>
       {open && (
         <ul id={id} className="pl-3">
           {row.entries.map((e) => (
@@ -300,7 +300,7 @@ function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, 
       <EmptyNote title="Recorded before the ledger">
         This ingest ({fmtCount(e.lines, 'row')}) happened before every copy was tracked. Its cards are counted in{' '}
         {reconstructed ? (
-          <button type="button" onClick={() => onOpen(reconstructed)} className="cursor-pointer voice-semi text-accent-ink underline underline-offset-2">Checklists before the ledger</button>
+          <Button tone="paper" emphasis="nav" onClick={() => onOpen(reconstructed)}>Checklists before the ledger</Button>
         ) : (
           <b>Checklists before the ledger</b>
         )}{' '}
@@ -317,9 +317,9 @@ function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, 
     <section aria-labelledby="entry-h" className="flex h-full min-h-0 flex-col">
       <header className="mx-sheet flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
-          <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
-            <Chevron dir="left" className="size-3.5" /> Purchase history
-          </button>
+          <Pressable onClick={onBack} className="inline-flex w-full items-center gap-0.5 text-sm voice-semi text-accent-ink">
+            <Chevron dir="left" className="size-icon-xs" /> Purchase history
+          </Pressable>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
           <div className="min-w-0">
@@ -337,13 +337,13 @@ function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, 
             {e.reverted_by != null && (
               <p className="mt-0.5 text-xs text-ink-muted">
                 Reverted — its copies were taken back out.{' '}
-                <button type="button" onClick={() => onOpen(e.reverted_by!)} className="-my-1 cursor-pointer py-1 voice-semi text-accent-ink underline underline-offset-2">See the revert</button>
+                <Button tone="paper" emphasis="nav" onClick={() => onOpen(e.reverted_by!)} className="-my-1 py-1">See the revert</Button>
               </p>
             )}
             {e.reverts != null && (
               <p className="mt-0.5 text-xs text-ink-muted">
                 Undid{' '}
-                <button type="button" onClick={() => onOpen(e.reverts!)} className="-my-1 cursor-pointer py-1 voice-semi text-accent-ink underline underline-offset-2">{e.detail ?? 'an import'}</button>.
+                <Button tone="paper" emphasis="nav" onClick={() => onOpen(e.reverts!)} className="-my-1 py-1">{e.detail ?? 'an import'}</Button>.
               </p>
             )}
             {reverted && <p role="status" className="mt-1 text-sm"><span className="highlighter px-1 voice-semi font-medium">{reverted}</span></p>}
@@ -359,9 +359,9 @@ function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, 
               </Link>
             )}
             {e.ledgered && lines.length > 0 && (
-              <button type="button" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="cursor-pointer text-ink-muted underline hover:text-ink">
+              <Button tone="paper" emphasis="link" onClick={() => onView(view === 'grid' ? 'list' : 'grid')}>
                 {view === 'grid' ? 'List view' : 'Card view'}
-              </button>
+              </Button>
             )}
           </span>
         </div>
@@ -389,7 +389,7 @@ function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, 
 function Fact({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-baseline gap-1.5">
-      <dt className="text-xs voice-semi uppercase tracking-[0.06em] text-ink-muted">{label}</dt>
+      <dt className="text-xs voice-semi uppercase tracking-caps text-ink-muted">{label}</dt>
       <dd className={strong ? 'voice-semi font-medium text-ink' : 'text-ink'}>{value}</dd>
     </div>
   );

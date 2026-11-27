@@ -3,6 +3,7 @@ import type { GuideCard } from '../core/guideCard';
 import { CardArt, GuideLine, Holdings, InclusionBars, Tags } from './CardFace';
 import { GuideNote } from './CardMeta';
 import { MarkToggle } from './MarkToggle';
+import { Pressable } from './controls/Pressable';
 
 type Props = {
   card: GuideCard;
@@ -17,18 +18,17 @@ type Props = {
 export const CardTile = memo(function CardTile({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'] }: Props) {
   return (
     <article className="flex min-w-0 flex-col gap-1">
-      <button
-        type="button"
+      <Pressable
         aria-label={onInspect ? `Inspect ${card.name}` : `${selected ? 'Unmark' : 'Mark'} ${card.name}`}
         aria-pressed={onInspect ? undefined : selected}
         onClick={() => (onInspect ? onInspect(card) : onToggle(card.key))}
-        className="group/pair block w-full cursor-pointer rounded-[4.5%/3.2%] transition-transform ease-guide hover:-translate-y-0.5 focus-visible:-translate-y-0.5"
+        className="group/pair block w-full rounded-card transition-transform ease-guide hover:-translate-y-0.5 focus-visible:-translate-y-0.5"
       >
         <CardArt
           card={card}
           className={`${selected ? 'ring-2 ring-highlight-solid ring-offset-2 ring-offset-paper' : ''} ${card.missing ? 'opacity-55 grayscale-[0.7]' : ''}`}
         />
-      </button>
+      </Pressable>
       <div className={`flex flex-col gap-0.5 rounded-xs px-0.5 ${selected ? 'highlighter' : ''}`}>
         <span className="truncate text-xs voice-semi font-medium text-ink" title={card.name}>{card.name}</span>
         <GuideLine card={card} />

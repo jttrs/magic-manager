@@ -6,6 +6,9 @@ import { cardEarmarkRemove, cardEarmarkSave, type CardEarmarkIn, type CardEarmar
 import { findEarmark, REASON_LABEL, type EarmarkReason } from '../core/cardEarmarks';
 import type { GuideCard } from '../core/guideCard';
 import { Button } from './Button';
+import { Check } from './controls/Check';
+import { SelectInput } from './controls/Select';
+import { TextInput } from './controls/TextField';
 
 type Draft = Omit<CardEarmarkIn, 'card'>;
 const fromMark = (m: CardEarmarkOut): Draft => ({ printing: m.scryfall_id, finish: m.finish, reason: m.reason, deck: m.deck_slug, note: m.note });
@@ -73,23 +76,19 @@ export function EarmarkSection({ card }: { card: GuideCard }) {
           </ToggleGroup.Root>
           {mark.reason === 'deck' && <DeckPick value={mark.deck_slug} disabled={busy} onChange={(deck) => change({ deck })} />}
           {here && (
-            <label className="inline-flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={prefersHere}
-                disabled={busy}
-                onChange={(e) => change(e.target.checked ? { printing: card.scryfallId, finish: null } : { printing: null, finish: null })}
-                className="accent-[var(--theme-accent)]"
-              />
+            <Check
+              checked={prefersHere}
+              disabled={busy}
+              onChange={(on) => change(on ? { printing: card.scryfallId, finish: null } : { printing: null, finish: null })}
+            >
               Prefer this printing ({here})
-            </label>
+            </Check>
           )}
           {mark.scryfall_id && !prefersHere && <p className="text-xs text-ink-muted">Prefers another printing.</p>}
           {prefersHere && card.finishes?.includes('foil') && card.finishes.includes('nonfoil') && (
-            <label className="inline-flex cursor-pointer items-center gap-1.5">
-              <input type="checkbox" checked={mark.finish === 'foil'} disabled={busy} onChange={(e) => change({ finish: e.target.checked ? 'foil' : 'nonfoil' })} className="accent-[var(--theme-accent)]" />
+            <Check checked={mark.finish === 'foil'} disabled={busy} onChange={(on) => change({ finish: on ? 'foil' : 'nonfoil' })}>
               Foil
-            </label>
+            </Check>
           )}
           <NoteField key={mark.updated_at} value={mark.note ?? ''} disabled={busy} onSave={(note) => change({ note: note || null })} />
         </div>
@@ -105,15 +104,10 @@ function DeckPick({ value, disabled, onChange }: { value: string | null; disable
   return (
     <label className="flex flex-col gap-1 text-ink-muted">
       For deck
-      <select
-        value={value ?? ''}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="h-9 cursor-pointer rounded-sm border border-rule bg-paper-raised px-2 text-sm text-ink focus-visible:border-accent"
-      >
+      <SelectInput value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value || null)}>
         <option value="">Any deck</option>
         {decks.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}
-      </select>
+      </SelectInput>
     </label>
   );
 }
@@ -133,7 +127,8 @@ function NoteField({ value, disabled, onSave }: { value: string; disabled: boole
   return (
     <label className="flex flex-col gap-1 text-ink-muted">
       Note
-      <input
+      <TextInput
+        tone="paper"
         value={text}
         maxLength={500}
         disabled={disabled}
@@ -141,7 +136,6 @@ function NoteField({ value, disabled, onSave }: { value: string; disabled: boole
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => e.key === 'Enter' && commit()}
-        className="h-9 rounded-sm border border-rule bg-paper-raised px-2 text-sm text-ink placeholder:text-ink-muted focus-visible:border-accent"
       />
     </label>
   );

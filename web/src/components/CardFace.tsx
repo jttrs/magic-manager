@@ -18,7 +18,7 @@ export function CardArt({ card, className = '', eager = false, crop = false }: {
   if (card.partner) return <PairArt card={card} partner={card.partner} className={className} eager={eager} crop={crop} />;
   if (!card.image) {
     return (
-      <div className={`grid aspect-[488/680] place-items-center rounded-sm border border-rule bg-paper-sunk p-2 text-center text-xs text-ink-muted ${className}`}>
+      <div className={`grid aspect-card place-items-center rounded-sm border border-rule bg-paper-sunk p-2 text-center text-xs text-ink-muted ${className}`}>
         {card.name}
       </div>
     );
@@ -39,7 +39,7 @@ export function CardArt({ card, className = '', eager = false, crop = false }: {
       decoding={seen.has(card.image) ? 'sync' : 'async'}
       onLoad={() => seen.add(card.image!)}
       draggable={false}
-      className={`aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk ${className}`}
+      className={`aspect-card h-auto w-full rounded-card bg-paper-sunk ${className}`}
     />
   );
 }
@@ -59,11 +59,11 @@ function PairArt({ card, partner, className, eager, crop }: { card: GuideCard; p
     );
   }
   return (
-    <span role="img" aria-label={`${card.name}: two partner commanders`} className={`relative block aspect-[488/680] w-full rounded-[4.5%/3.2%] ${className}`}>
+    <span role="img" aria-label={`${card.name}: two partner commanders`} className={`relative block aspect-card w-full rounded-card ${className}`}>
       <span className="absolute right-0 top-0 w-[86%] brightness-[0.86] transition-[filter] duration-150 ease-guide group-hover/pair:brightness-100">
         <CardArt card={back} eager={eager} />
       </span>
-      <span className="absolute bottom-0 left-0 w-[86%] rounded-[4.5%/3.2%] shadow-[-2px_8px_18px_-8px_var(--theme-scrim)]">
+      <span className="absolute bottom-0 left-0 w-[86%] rounded-card shadow-[-2px_8px_18px_-8px_var(--theme-scrim)]">
         <CardArt card={lead} eager={eager} />
       </span>
     </span>
@@ -89,7 +89,7 @@ export function GuideLine({ card }: { card: GuideCard }) {
 export function InclusionBars({ a, b, labelA, labelB, compact = false }: { a: number | null; b: number | null; labelA: string; labelB: string; compact?: boolean }) {
   const bar = (v: number | null, label: string, strong: boolean) => (
     <span className="flex items-center gap-1.5" title={`${label}: ${fmtPct(v)}`}>
-      <span className={`relative h-[3px] flex-1 overflow-hidden rounded-pill bg-rule ${compact ? 'min-w-10' : ''}`}>
+      <span className={`relative h-bar flex-1 overflow-hidden rounded-pill bg-rule ${compact ? 'min-w-10' : ''}`}>
         <span
           className={`absolute inset-y-0 left-0 rounded-pill ${strong ? 'bg-rule-strong' : 'bg-ink-muted'}`}
           style={{ width: `${Math.max(0, Math.min(100, v ?? 0))}%` }}
@@ -117,7 +117,7 @@ export function Holdings({ card }: { card: GuideCard }) {
     <span className="flex shrink-0 items-baseline gap-1.5 text-2xs tabular" aria-label={card.missing && !label ? 'Missing' : `Owned: ${label || 'none'}${card.missing ? ' (missing in this finish)' : ''}`}>
       {nf > 0 && <span className="font-bold text-ink">×{nf}</span>}
       {fo > 0 && <span className="font-bold text-accent-ink">✦×{fo}</span>}
-      {card.missing && <span className="voice-condensed font-bold uppercase tracking-[0.06em] text-danger">Missing</span>}
+      {card.missing && <span className="voice-condensed font-bold uppercase tracking-caps text-danger">Missing</span>}
     </span>
   );
 }
@@ -126,7 +126,7 @@ export function Holdings({ card }: { card: GuideCard }) {
 export function Tags({ tags }: { tags: string[] }) {
   if (!tags.length) return null;
   return (
-    <span className="block min-w-0 truncate text-2xs voice-semi uppercase tracking-[0.04em] text-ink-muted" title={tags.join(' · ')}>
+    <span className="block min-w-0 truncate text-2xs voice-semi uppercase tracking-caps-tight text-ink-muted" title={tags.join(' · ')}>
       {tags.map((t, i) => (
         <span key={t} className={t === 'Chase' || t === EARMARKED_TAG ? 'font-bold text-accent-ink' : ''}>{i ? ' · ' : ''}{t}</span>
       ))}

@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { deckQuery } from '../../app/queries';
 import { useSelection } from '../../app/selection';
 import { AddCardsDialog, type AddCardsSeed } from '../../components/addcards/AddCardsDialog';
-import { Chevron } from '../../components/Chevron';
+import { Button } from '../../components/Button';
+import { Pressable } from '../../components/controls/Pressable';
+import { Chevron } from '../../components/icons/Chevron';
 import { IconAction } from '../../components/IconAction';
 import { InfoTip } from '../../components/InfoTip';
 import { ErrorNote, GridSkeleton } from '../../components/States';
-import { AddCardMark } from '../../components/StoreMarks';
+import { AddCardMark } from '../../components/icons/marks';
 import { VirtualGuide } from '../../components/VirtualGuide';
 import type { RecipeOut } from '../../core/api';
 import { coverage, deckGuideGroups, deckReviewLines } from '../../core/decks';
@@ -41,9 +43,9 @@ export function DeckInspector({ slug, recipe, threshold, view, autoAdd = false, 
     <section aria-labelledby="deck-h" className="flex h-full min-h-0 flex-col">
       <header className="mx-4 flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1.5 pt-1">
         {onBack && (
-          <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
+          <Pressable onClick={onBack} className="inline-flex w-full items-center gap-0.5 text-sm voice-semi text-accent-ink">
             <Chevron dir="left" className="size-3.5" /> All recipes
-          </button>
+          </Pressable>
         )}
         <div className="min-w-0">
           <h2 id="deck-h" className="text-2xl voice-condensed font-bold uppercase leading-none text-ink">{deck.name}</h2>
@@ -71,9 +73,9 @@ export function DeckInspector({ slug, recipe, threshold, view, autoAdd = false, 
           )}
           <DeckActions detail={q.data} slug={slug} onAddToCollection={() => setSeed({ name: deck.name, lines: deckReviewLines(cards) })} />
           {onView && (
-            <button type="button" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="cursor-pointer px-2 text-sm text-ink-muted underline hover:text-ink">
+            <Button tone="paper" emphasis="link" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="px-2 text-sm">
               {view === 'grid' ? 'List view' : 'Grid view'}
-            </button>
+            </Button>
           )}
         </span>
       </header>

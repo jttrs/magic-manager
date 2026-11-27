@@ -7,69 +7,30 @@ import { sortShort, sortSummary, type SortPreset, type SortRule } from '../core/
 import { IconTooltip } from './IconTooltip';
 import { iconActionClass } from './iconActionClass';
 import { SortRulesEditor } from './SortBuilder';
+import { CaretMark, CheckMark, GridMark, GroupMark, ListMark, SortMark } from './icons/marks';
+import { menuLabelClass, menuPanelClass } from './controls/surfaces';
 
 type Mark = ComponentType<SVGProps<SVGSVGElement>>;
-const base = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
-
-/** Bars shortening downward with a down-arrow beside them (sort). */
-function SortMark(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <path d="M4 6h10M4 11h7M4 16h4" />
-      <path d="M18 5v13M15 15l3 3 3-3" />
-    </svg>
-  );
-}
-
-/** Two ruled heads, each over its rows (group by). */
-function GroupMark(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <path d="M3.5 4.5h17M6.5 8h11M6.5 11h11" />
-      <path d="M3.5 14.5h17M6.5 18h11" />
-    </svg>
-  );
-}
-
-function GridMark(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <rect x="4" y="4" width="6.5" height="6.5" rx="1" />
-      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1" />
-      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1" />
-      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" />
-    </svg>
-  );
-}
-
-function ListMark(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <path d="M8.5 6h11.5M8.5 12h11.5M8.5 18h11.5" />
-      <path d="M4 6h.5M4 12h.5M4 18h.5" strokeWidth={2.4} />
-    </svg>
-  );
-}
 
 /** The header trigger: the control's mark, then its current choice (hidden on phones,
  *  where a small amber dot says "not the default" instead). */
 const TRIGGER =
-  'touch-hit inline-flex min-h-9 max-w-[14rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm voice-semi text-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk';
+  'touch-hit inline-flex min-h-control max-w-[14rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm voice-semi text-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk';
 
 function TriggerFace({ Icon, short, changed }: { Icon: Mark; short: string; changed: boolean }) {
   return (
     <>
       <span className="relative text-accent-ink">
-        <Icon className="size-[1.2rem]" />
+        <Icon className="size-icon-md" />
         {changed && <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 size-1.5 rounded-pill bg-accent sm:hidden" />}
       </span>
       <span className="hidden min-w-0 truncate sm:inline">{short}</span>
-      <span aria-hidden="true" className="hidden text-xs text-ink-muted sm:inline">▾</span>
+      <CaretMark className="hidden size-icon-sm text-ink-muted sm:inline" />
     </>
   );
 }
 
-const MENU = 'z-50 rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]';
+const MENU = menuPanelClass;
 
 /** Grid or list, as two pressed-state icon buttons. */
 export function ViewToggle<V extends 'grid' | 'list'>({ value, onChange, label = 'Card view' }: { value: V; onChange: (v: V) => void; label?: string }) {
@@ -82,7 +43,7 @@ export function ViewToggle<V extends 'grid' | 'list'>({ value, onChange, label =
       {opts.map(({ v, text, Icon }) => (
         <IconTooltip key={v} label={`${text} view`}>
           <button type="button" aria-label={`${text} view`} aria-pressed={value === v} onClick={() => onChange(v)} className={iconActionClass('paper')}>
-            <Icon className="size-[1.2rem]" />
+            <Icon className="size-icon-md" />
           </button>
         </IconTooltip>
       ))}
@@ -113,12 +74,12 @@ function ArrangeMenu<T extends string>({ label, Icon, value, options, onChange, 
       </IconTooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" sideOffset={4} collisionPadding={12} className={`${MENU} w-[max(var(--radix-dropdown-menu-trigger-width),13rem)] py-1`}>
-          <DropdownMenu.Label className="px-3 pb-1 pt-1.5 text-xs voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">{label}</DropdownMenu.Label>
+          <DropdownMenu.Label className={menuLabelClass}>{label}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
             {options.map((o) => (
               <DropdownMenu.RadioItem key={o.value} value={o.value} className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm outline-none data-[highlighted]:bg-chrome-line data-[state=checked]:text-accent">
                 <span aria-hidden="true" className="w-3 text-accent">
-                  <DropdownMenu.ItemIndicator><svg {...base} className="size-3"><path d="m4 12.5 5 5L20 6.5" strokeWidth={2.2} /></svg></DropdownMenu.ItemIndicator>
+                  <DropdownMenu.ItemIndicator><CheckMark className="size-3" /></DropdownMenu.ItemIndicator>
                 </span>
                 <span className="min-w-0 flex-1 truncate">{o.label}</span>
               </DropdownMenu.RadioItem>
@@ -140,14 +101,14 @@ export function GroupControl<T extends string>({ value, options, onChange, defau
   if (options.length !== 2) return <ArrangeMenu label="Group by" Icon={GroupMark} value={value} options={options} onChange={onChange} defaultValue={defaultValue} />;
   return (
     <div role="group" aria-label="Group by" className="flex items-center gap-0.5">
-      <span className="px-1 text-accent-ink" title="Group by"><GroupMark className="size-[1.2rem]" /></span>
+      <span className="px-1 text-accent-ink" title="Group by"><GroupMark className="size-icon-md" /></span>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className="min-h-9 cursor-pointer rounded-sm px-2 text-sm voice-semi text-ink-muted transition-colors ease-guide hover:bg-paper-sunk aria-pressed:text-ink aria-pressed:shadow-[inset_0_-2px_0_var(--theme-accent)]"
+          className="min-h-control cursor-pointer rounded-sm px-2 text-sm voice-semi text-ink-muted transition-colors ease-guide hover:bg-paper-sunk aria-pressed:text-ink aria-pressed:shadow-[inset_0_-2px_0_var(--theme-accent)]"
         >
           {o.label}
         </button>
