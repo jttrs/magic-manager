@@ -4,6 +4,7 @@ import { CardArt, GuideLine, Holdings, InclusionBars, Tags } from './CardFace';
 import { GuideNote } from './CardMeta';
 import { MarkToggle } from './MarkToggle';
 import { Pressable } from './controls/Pressable';
+import { TallyControls, type Tally } from './TallyControls';
 
 type Props = {
   card: GuideCard;
@@ -11,11 +12,15 @@ type Props = {
   onToggle: (key: string) => void;
   onInspect?: (card: GuideCard) => void;
   barLabels?: [string, string];
+  /** Collection: add buttons in place of the holdings line, with this card's pending copies. */
+  tally?: Tally;
+  pendingNf?: number;
+  pendingFo?: number;
 };
 
 /** Grid view: card art + guide caption. Pressing the art inspects the card; the
  *  caption's list toggle adds it to the marked list (nothing ever sits on the art). */
-export const CardTile = memo(function CardTile({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'] }: Props) {
+export const CardTile = memo(function CardTile({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'], tally, pendingNf = 0, pendingFo = 0 }: Props) {
   return (
     <article className="flex min-w-0 flex-col gap-1">
       <Pressable
@@ -34,9 +39,11 @@ export const CardTile = memo(function CardTile({ card, selected, onToggle, onIns
         <GuideLine card={card} />
         {card.note && <GuideNote note={card.note} />}
         {/* Holdings share a line with the list toggle so the name keeps the full width. */}
-        {(card.owned || onInspect) && (
+        {(card.owned || onInspect || tally) && (
           <span className="-my-1 flex min-h-7 items-center gap-1">
-            <span className="min-w-0 flex-1">{card.owned && <Holdings card={card} />}</span>
+            <span className="min-w-0 flex-1">
+              {tally ? <TallyControls card={card} tally={tally} pendingNf={pendingNf} pendingFo={pendingFo} /> : card.owned && <Holdings card={card} />}
+            </span>
             {onInspect && <MarkToggle name={card.name} marked={selected} onToggle={() => onToggle(card.key)} size="sm" />}
           </span>
         )}

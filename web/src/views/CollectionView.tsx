@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { oracleTagCardsQuery, collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
+import { setUnownedFamilies, useUnownedFamilies } from '../app/unownedFamilies';
+import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { buyListTargets, type BuyStore } from '../components/buyTargets';
@@ -12,8 +14,9 @@ import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
 import { CardTagPicker } from './collection/CardTagPicker';
-import { summaryLine } from '../core/checklist';
-import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
+import { draftedIds, summaryLine, onlyDrafted, pendingOf } from '../core/checklist';
+import { ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
+import { PendingBar } from './collection/PendingBar';
 import { useChecklist } from './collection/useChecklist';
 import { SceneDetail, SceneMeta } from './collection/SceneHead';
 import { useFeature } from '../app/features';
@@ -21,6 +24,8 @@ import { useSettingsSection } from '../app/settings';
 import { SettingsChoice, SettingsRow } from '../components/settings/SettingsControls';
 import { setMissingMeans, useMissingMeans, type MissingMeans } from './collection/missingMeans';
 import { Button } from '../components/Button';
+import { Check } from '../components/controls/Check';
+import type { Tally } from '../components/TallyControls';
 import { MultiSelect } from '../components/MultiSelect';
 import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
 import { SortControl, ViewToggle } from '../components/ArrangeControls';
@@ -47,12 +52,25 @@ export function CollectionView() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: '/collection' });
   const set = (patch: Partial<CollectionSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
+  const unowned = useUnownedFamilies();
   const fams = useQuery(familiesQuery());
-  // No families chosen = every family you own; the query waits for the list in that case.
-  const allCodes = useMemo(() => fams.data?.map((f) => f.code) ?? [], [fams.data]);
+  // No families chosen = every family you OWN; the query waits for the list in that case.
+  const allCodes = useMemo(() => (fams.data ?? []).filter((f) => f.owned !== false).map((f) => f.code), [fams.data]);
   const scope = search.families.length ? search.families : allCodes;
+  // Families you don't own are listed only while the switch is on (or one is already chosen, so its name stays).
+  const wantAll = unowned || (fams.isSuccess && search.families.some((c) => !allCodes.includes(c)));
+  const allFams = useQuery({ ...familiesQuery(true), enabled: wantAll });
+  const famOptions = useMemo(() => {
+    const own = (fams.data ?? []).map((f) => ({ value: f.code, label: f.name }));
+    const have = new Set(own.map((o) => o.value));
+    const rest = (allFams.data ?? [])
+      .filter((f) => f.owned === false && !have.has(f.code) && (unowned || search.families.includes(f.code)))
+      .map((f) => ({ value: f.code, label: f.name, hint: f.year ?? undefined, bulk: false as const }));
+    return [...own, ...rest];
+  }, [fams.data, allFams.data, unowned, search.families]);
+  const famName = useCallback((code: string) => famOptions.find((o) => o.value === code)?.label ?? code.toUpperCase(), [famOptions]);
   // Every family you own spelled out (an old link, or ticking them all) is just "all": drop the list.
-  const coversAll = allCodes.length > 0 && search.families.length > 0 && allCodes.every((c) => search.families.includes(c));
+  const coversAll = allCodes.length > 0 && search.families.length > 0 && allCodes.every((c) => search.families.includes(c)) && search.families.every((c) => allCodes.includes(c));
   useEffect(() => {
     if (coversAll) set({ families: [] });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `set` is a fresh closure each render
@@ -123,6 +141,100 @@ export function CollectionView() {
   const cartCheck = useFeature('cart_check');
   const checklist = useChecklist();
   const counting = search.count && scope.length > 0;
+
+  // Picking a family you own nothing from while only Owned shows would read as a blank sheet:
+  // turn Missing on in the same URL update and say so once (until the next filter change).
+  const filterKey = (x: CollectionSearch) => JSON.stringify([x.families, x.show, x.q, x.exclude, x.fn, x.ot, x.em]);
+  const [missingNote, setMissingNote] = useState<{ name: string; key: string } | null>(null);
+  const pickFamilies = (families: string[]) => {
+    const fresh = families.find((c) => !search.families.includes(c) && !allCodes.includes(c));
+    const all = allCodes.length > 0 && families.length === allCodes.length && allCodes.every((c) => families.includes(c));
+    const patch: Partial<CollectionSearch> = { families: all ? [] : families };
+    if (fresh && !search.show.includes('missing')) {
+      patch.show = ['owned', 'missing'];
+      setMissingNote({ name: famName(fresh), key: filterKey({ ...search, ...patch }) });
+    }
+    set(patch);
+  };
+
+  // Staging copies to add from the cards (grid and list). The draft is read through a ref, so
+  // `tally` keeps its identity and a memoized tile re-renders only when its own numbers change.
+  const draftRef = useRef(checklist.draft);
+  draftRef.current = checklist.draft;
+  const byIdRef = useRef(view?.byId);
+  byIdRef.current = view?.byId;
+  const familyNamesRef = useRef(new Map<string, string>());
+  familyNamesRef.current = new Map((q.data?.families ?? []).map((f) => [f.code, f.name]));
+  const { add: draftAdd, setToAdd: draftSetToAdd } = checklist;
+  const tally = useMemo<Tally>(() => {
+    const row = (card: GuideCard) => byIdRef.current?.get(card.key);
+    const family = (c: CollectionCardOut) => familyNamesRef.current.get(c.family) ?? c.family.toUpperCase();
+    return {
+      pending: (card) => ({ nonfoil: pendingOf(draftRef.current, card.key, 'nonfoil'), foil: pendingOf(draftRef.current, card.key, 'foil') }),
+      add: (card, finish, n) => {
+        const c = row(card);
+        if (c) draftAdd(c, finish, n, family(c));
+      },
+      setPending: (card, finish, n) => {
+        const c = row(card);
+        if (c) draftSetToAdd(c, finish, n, family(c));
+      },
+      unitUsd: (card, finish) => {
+        const c = row(card);
+        return c ? (finish === 'foil' ? (c.price_usd_foil ?? c.price_usd ?? null) : (c.price_usd ?? null)) : null;
+      },
+    };
+  }, [draftAdd, draftSetToAdd]);
+
+  // Review: only the cards the draft touches.
+  const [reviewing, setReviewing] = useState(false);
+  useEffect(() => {
+    if (!checklist.dirty) setReviewing(false);
+  }, [checklist.dirty]);
+  const sections = useMemo(() => {
+    if (!view) return [];
+    return reviewing ? onlyDrafted(view.sections, draftedIds(checklist.draft)) : view.sections;
+  }, [view, reviewing, checklist.draft]);
+  const reviewCount = useMemo(() => (reviewing ? sections.reduce((n, s) => n + s.items.length, 0) : 0), [reviewing, sections]);
+
+  // A family you picked that has no local printings yet is read for you, once per visit.
+  const qc = useQueryClient();
+  const { live: readLive, start: startRead, reset: resetRead } = useJob();
+  const startedReads = useRef(new Set<string>());
+  const [reading, setReading] = useState<string | null>(null);
+  const [readError, setReadError] = useState<{ family: string; message: string } | null>(null);
+  const unread = useMemo(() => (q.data?.families ?? []).filter((f) => f.catalog_read === false), [q.data]);
+  useEffect(() => {
+    if (reading || readError) return;
+    const next = unread.find((f) => !startedReads.current.has(f.code));
+    if (!next) return;
+    startedReads.current.add(next.code);
+    setReading(next.code);
+    resetRead();
+    void startRead('collection.read_family', { family: next.code }).then((err) => {
+      if (err) {
+        setReadError({ family: next.code, message: err });
+        setReading(null);
+      }
+    });
+  }, [unread, reading, readError, startRead, resetRead]);
+  useEffect(() => {
+    if (!reading || !readLive) return;
+    if (readLive.status === 'succeeded') {
+      setReading(null);
+      void qc.invalidateQueries({ queryKey: ['collection'] });
+    } else if (readLive.status === 'failed') {
+      setReadError({ family: reading, message: readLive.error ?? 'The server couldn’t read this family.' });
+      setReading(null);
+    }
+  }, [readLive, reading, qc]);
+  const retryRead = () => {
+    if (readError) startedReads.current.delete(readError.family);
+    setReadError(null);
+  };
+  const readingName = reading ? (q.data?.families.find((f) => f.code === reading)?.name ?? reading.toUpperCase()) : null;
+  const readStatus = readingName ? `Reading ${readingName}${readLive?.log.at(-1)?.msg ? ` · ${readLive.log.at(-1)!.msg}` : ''}` : null;
+  const onlyUnread = unread.length > 0 && unread.length === (q.data?.families.length ?? -1);
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
   const buyText = (target: BuyStore) => async () => {
@@ -147,8 +259,19 @@ export function CollectionView() {
             noun="families"
             loading={fams.isPending}
             value={search.families}
-            onChange={(families) => set({ families: families.length === (fams.data?.length ?? 0) ? [] : families })}
-            options={(fams.data ?? []).map((f) => ({ value: f.code, label: f.name }))}
+            onChange={pickFamilies}
+            options={famOptions}
+            headerExtra={<Check checked={unowned} onChange={setUnownedFamilies}>Include families you don’t own</Check>}
+            emptyExtra={(query) =>
+              unowned ? (
+                <p>No families match “{query}”.</p>
+              ) : (
+                <>
+                  <p>No family you own matches “{query}”.</p>
+                  <Button emphasis="link" onClick={() => setUnownedFamilies(true)}>Search all families</Button>
+                </>
+              )
+            }
           />
         )}
         <SegmentedToggles
@@ -241,6 +364,10 @@ export function CollectionView() {
     body = <GridSkeleton label="Loading your collection…" />;
   } else if (q.isError) {
     body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
+  } else if (onlyUnread && readError) {
+    body = <ErrorNote error={new Error(`Couldn’t read ${famName(readError.family)}: ${readError.message}`)} onRetry={retryRead} />;
+  } else if (onlyUnread && (reading || !readError)) {
+    body = <EmptyNote title={readStatus ?? 'Reading this family…'}>Fetching its printings so they can be listed. This takes a moment.</EmptyNote>;
   } else if (!view || view.cards.length === 0) {
     // An exclude picker with every listed option unchecked hides everything — say which.
     const allHidden = (['Rarity', 'Finish', 'Treatment'] as const).find((g) => {
@@ -260,17 +387,19 @@ export function CollectionView() {
     const familyNames = new Map(q.data.families.map((f) => [f.code, f.name]));
     body = (
       <div className="flex h-full min-h-0 flex-col">
-        <p role="status" aria-live="polite" className="mx-sheet py-2 text-sm tabular text-ink-muted">{summaryLine(checklist.summary, checklist.saved)}</p>
+        {!checklist.dirty && !checklist.saved && (
+          <p role="status" aria-live="polite" className="mx-sheet py-2 text-sm tabular text-ink-muted">{summaryLine(checklist.summary, null)}</p>
+        )}
         <ChecklistNotes checklist={checklist} />
-        <ChecklistTable sections={view.sections} byId={view.byId} familyNames={familyNames} checklist={checklist} />
+        <ChecklistTable sections={sections} byId={view.byId} familyNames={familyNames} checklist={checklist} />
       </div>
     );
   } else {
-    body = <VirtualGuide sections={view.sections} density={search.view} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
+    body = <VirtualGuide sections={sections} density={search.view} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} tally={tally} />;
   }
 
   return (
-    <ViewLayout label="Collection controls" summary={controlsSummary(search, fams.data)} sidebar={sidebar} subnav={<CollectionTabs />}>
+    <ViewLayout label="Collection controls" summary={controlsSummary(search, allFams.data ?? fams.data)} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
         title="Collection"
         arrange={
@@ -301,7 +430,6 @@ export function CollectionView() {
         }
         actions={
           <>
-            {counting && <ChecklistActions checklist={checklist} />}
             <IconAction
               Icon={CountCardsMark}
               aria-pressed={counting}
@@ -329,7 +457,19 @@ export function CollectionView() {
               Couldn’t find a set family for {q.data.skipped.map((c) => c.toUpperCase()).join(', ')}: left out.
             </p>
           ) : null}
+          {readStatus && !onlyUnread && <p role="status" aria-live="polite" className="mx-sheet py-2 text-sm text-ink-muted">{readStatus}</p>}
+          {readError && !onlyUnread && (
+            <p role="alert" className="mx-sheet flex flex-wrap items-center gap-x-3 py-2 text-sm text-danger">
+              Couldn’t read {famName(readError.family)}: {readError.message}
+              <Button tone="paper" emphasis="link" onClick={retryRead}>Retry</Button>
+            </p>
+          )}
+          {missingNote && missingNote.key === filterKey(search) && (
+            <p role="status" className="mx-sheet py-2 text-sm text-ink-muted">Showing missing cards — you don’t own any from {missingNote.name} yet.</p>
+          )}
           <div className="min-h-0 flex-1">{body}</div>
+          {!counting && <ChecklistNotes checklist={checklist} />}
+          <PendingBar checklist={checklist} reviewing={reviewing} reviewCount={reviewCount} onReviewing={setReviewing} />
         </div>
       </GuideSheet>
       <ChecklistLeaveGuard checklist={checklist} />

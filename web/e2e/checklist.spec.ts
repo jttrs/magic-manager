@@ -30,9 +30,9 @@ test('checklist mode: type counts, keyboard walks the column, Save sends one bat
   await expect(page.locator('input:focus')).toHaveAttribute('aria-invalid', 'true');
   await page.keyboard.press('Escape');
 
-  await expect(page.getByText(/^Modifying counts · 1 change · \+2 copies/)).toBeVisible();
-  await page.getByRole('button', { name: 'Save 1 change' }).click();
-  await expect(page.getByText('Saved 1 count · +2 copies')).toBeVisible();
+  await expect(page.getByText(/^To add · 1 printing · 2 copies · \+\$1\.08 at market/)).toBeVisible();
+  await page.getByRole('button', { name: 'Add 2 copies' }).click();
+  await expect(page.getByText('Added 2 copies')).toBeVisible();
   expect(body!.changes).toEqual([expect.objectContaining({ finish: 'nonfoil', qty: 4, expected: 2 })]);
   expect(body!.family).toBe('Bloomburrow');
 });
@@ -45,9 +45,9 @@ test('checklist draft survives a reload; Discard asks first and clears it', asyn
   await page.reload();
   await expect(page.getByLabel('Alania, Divergent Storm BLB 327 nonfoil')).toHaveValue('5');
   await page.getByRole('button', { name: 'Discard' }).click();
-  await page.getByRole('button', { name: 'Discard counts' }).click();
+  await page.getByRole('button', { name: 'Discard copies' }).click();
   await expect(page.getByLabel('Alania, Divergent Storm BLB 327 nonfoil')).toHaveValue('1');
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Add \d+ cop/ })).toHaveCount(0);
 });
 
 test('checklist warns before leaving Collection with unsaved counts', async ({ page }) => {
@@ -84,15 +84,15 @@ test('checklist: a stale save flags the moved cells; Enter keeps your count and 
   const cell = page.getByLabel('Azure Beastbinder BLB 41 nonfoil');
   await cell.click();
   await page.keyboard.type('4');
-  await page.getByRole('button', { name: 'Save 1 change' }).click();
+  await page.getByRole('button', { name: 'Add 2 copies' }).click();
   await expect(page.getByText(/1 count changed in your collection since you started editing counts/)).toBeVisible();
   await expect(cell).toHaveValue('4');
   await expect(page.getByText('now 3')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Save/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Add 1 copy/ })).toBeDisabled();
   await cell.click();
   await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Save 1 change' }).click();
-  await expect(page.getByText('Saved 1 count · +1 copy')).toBeVisible();
+  await page.getByRole('button', { name: 'Add 1 copy' }).click();
+  await expect(page.getByText('Added 1 copy')).toBeVisible();
   expect(bodies.map((b) => b.changes[0].expected)).toEqual([2, 3]);
 });
 
@@ -109,11 +109,11 @@ test('checklist: counts typed while a save is in flight are kept', async ({ page
   await page.goto(COUNT_URL);
   await page.getByLabel('Azure Beastbinder BLB 41 nonfoil').click();
   await page.keyboard.type('4');
-  await page.getByRole('button', { name: 'Save 1 change' }).click();
+  await page.getByRole('button', { name: 'Add 2 copies' }).click();
   await page.getByLabel('Agate-Blade Assassin BLB 82 nonfoil').click();
   await page.keyboard.type('9');
   release();
-  await expect(page.getByText(/^Modifying counts · 1 change/)).toBeVisible();
+  await expect(page.getByText(/^To add · 1 printing · 3 copies/)).toBeVisible();
   await expect(page.getByLabel('Agate-Blade Assassin BLB 82 nonfoil')).toHaveValue('9');
 });
 

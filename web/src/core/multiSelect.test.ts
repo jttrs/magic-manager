@@ -72,3 +72,19 @@ describe('bulkActions', () => {
     expect(bulkActions('exclude', shown, ['rare', 'common'], true).map((a) => [a.label, a.next])).toEqual([['Uncheck shown', ['common']]]);
   });
 });
+
+describe('bulkActions with hand-picked options', () => {
+  const fams: PickOption[] = [...opts('Aetherdrift', 'Bloomburrow'), { value: 'zzz', label: 'Zendikar', bulk: false }];
+  it('Select all and Select shown never reach an option marked bulk: false', () => {
+    expect(bulkActions('scope', fams, [], false)).toEqual([{ label: 'Select all', next: ['aetherdrift', 'bloomburrow'] }]);
+    expect(bulkActions('scope', fams, [], true)).toEqual([{ label: 'Select shown', next: ['aetherdrift', 'bloomburrow'] }]);
+  });
+  it('Clear all and Clear shown leave a hand-picked option chosen', () => {
+    const value = ['aetherdrift', 'zzz'];
+    expect(bulkActions('scope', fams, value, false).find((b) => b.label === 'Clear all')?.next).toEqual(['zzz']);
+    expect(bulkActions('scope', fams, value, true).find((b) => b.label === 'Clear shown')?.next).toEqual(['zzz']);
+  });
+  it('offers no Clear all when only hand-picked options are chosen', () => {
+    expect(bulkActions('scope', fams, ['zzz'], false).map((b) => b.label)).toEqual(['Select all']);
+  });
+});

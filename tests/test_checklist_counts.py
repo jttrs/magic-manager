@@ -162,3 +162,25 @@ def test_xlsx_modify_zero_untouched_zeroes_absent_rows(four, tmp_path):
         deltas = sorted(r["delta"] for r in c.execute(
             "SELECT delta FROM inventory_events WHERE ingest_id=?", (res["ingest_id"],)))
     assert deltas == [-4, -2, -1]
+
+
+def test_adds_only_save_is_additive_and_revertible(two):
+    res = sets.apply_counts([CountChange("a", "nonfoil", 5, expected=3),
+                             CountChange("b", "foil", 2, expected=0)], label="web:checklist · Test")
+    (ev,) = _events()
+    assert ev["mode"] == "additive"
+    assert ingest.not_revertible_reason(ev["method"], ev["mode"], ev["label"], ev["status"]) is None
+    ingest.revert_event(res["ingest_id"], dry_run=False)
+    assert _qty("a", "nonfoil") == 3 and _qty("b", "foil") == 0 and _qty("c", "foil") == 1
+
+
+def test_mixed_save_is_replace_and_not_revertible(two):
+    sets.apply_counts([CountChange("a", "nonfoil", 1), CountChange("b", "foil", 2)], label="web:checklist · Test")
+    (ev,) = _events()
+    assert ev["mode"] == "replace"
+    assert ingest.not_revertible_reason(ev["method"], ev["mode"], ev["label"], ev["status"])
+
+
+def test_stale_still_raises_on_adds_only(two):
+    with pytest.raises(sets.StaleCounts):
+        sets.apply_counts([CountChange("a", "nonfoil", 5, expected=1)], label="web:checklist · Test")

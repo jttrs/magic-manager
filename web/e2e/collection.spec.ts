@@ -28,22 +28,22 @@ test('families are a searchable checkbox list, never a chip wall', async ({ page
   await page.goto(COLLECTION_URL);
   await expect(page.getByRole('toolbar', { name: 'Set families' })).toHaveCount(0);
   await page.getByRole('button', { name: /Set families/ }).click();
-  await expect(page.getByRole('checkbox')).toHaveCount(fixtures.families.length);
+  await expect(page.getByRole('checkbox')).toHaveCount(fixtures.families.length + 1); // + the “families you don’t own” switch
   await page.getByRole('searchbox', { name: 'Filter families' }).fill('zzzz');
-  await expect(page.getByText(/No families match/)).toBeVisible();
+  await expect(page.getByText(/No family you own matches/)).toBeVisible();
 });
 
-test('every printing shows; owned counts and missing marks sit under the art', async ({ page }) => {
+test('every printing shows; owned counts (and add buttons) sit under the art', async ({ page }) => {
   await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByRole('article')).toHaveCount(cards.length);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Collection');
   const foil = cards.find((c) => c.owned.foil)!;
   const tile = page.getByRole('article').filter({ hasText: foil.name }).first();
-  await expect(tile.getByLabel(/^Owned: /)).toContainText(`✦×${foil.owned.foil}`);
+  await expect(tile.getByRole('button', { name: /^Add one foil/ })).toContainText(String(foil.owned.foil));
   // nothing ever overlays the art: the mark toggle lives in the caption
-  expect(await tile.locator('.absolute').count()).toBe(0);
+  expect(await tile.getByRole('button', { name: /^Inspect/ }).locator('.absolute').count()).toBe(0);
   const missing = cards.find((c) => total(c) === 0)!;
-  await expect(page.getByRole('article').filter({ hasText: missing.name }).first()).toContainText('Missing');
+  await expect(page.getByRole('article').filter({ hasText: missing.name }).first().getByRole('button', { name: /^Add one nonfoil — 0 owned/ })).toBeVisible();
 });
 
 test('show owned / missing filters', async ({ page }) => {

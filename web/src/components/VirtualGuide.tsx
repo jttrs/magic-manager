@@ -6,6 +6,7 @@ import type { GuideCard, GuideGroup } from '../core/guideCard';
 import { CardRow } from './CardRow';
 import { CardInspector } from './CardInspector';
 import { CardTile } from './CardTile';
+import type { Tally } from './TallyControls';
 
 type Density = 'grid' | 'list';
 
@@ -33,12 +34,20 @@ type Props = {
   minCardWidth?: number;
   /** Rendered after the last row, inside the scroll region (e.g. a "Load more" button). */
   footer?: ReactNode;
+  /** Collection: add buttons on every card (see TallyControls); other views pass nothing. */
+  tally?: Tally;
 };
 
 const GAP = 12;
 
+/** A card's pending copies as primitives, so a memoized tile re-renders only when its own numbers change. */
+const pendingOf = (tally: Tally | undefined, card: GuideCard) => {
+  const p = tally?.pending(card);
+  return p ? { pendingNf: p.nonfoil, pendingFo: p.foil } : {};
+};
+
 /** One virtualized scroll region for any grouped card list, in grid or list view. */
-export function VirtualGuide({ sections, density, selected, onToggle, barLabels, label, minCardWidth = 120, footer }: Props) {
+export function VirtualGuide({ sections, density, selected, onToggle, barLabels, label, minCardWidth = 120, footer, tally }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Track the element in state too, so the width observer re-attaches whenever
   // the scroll region remounts (otherwise the grid can stick at one column).
@@ -144,11 +153,11 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
                   onNext={neighbor(vi.index, 1) ? () => jump(vi.index, 1) : undefined}
                 />
               ) : density === 'list' ? (
-                row.items.map((c) => <CardRow key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} onInspect={setInspecting} barLabels={barLabels} />)
+                row.items.map((c) => <CardRow key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} onInspect={setInspecting} barLabels={barLabels} tally={tally} {...pendingOf(tally, c)} />)
               ) : (
                 <div className="grid pb-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: GAP }}>
                   {row.items.map((c) => (
-                    <CardTile key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} onInspect={setInspecting} barLabels={barLabels} />
+                    <CardTile key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} onInspect={setInspecting} barLabels={barLabels} tally={tally} {...pendingOf(tally, c)} />
                   ))}
                 </div>
               )}

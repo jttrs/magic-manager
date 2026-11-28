@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBlocker } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { collectionChecklist, type ChecklistOut, type CollectionCardOut } from '../../core/api';
-import { cellKey, confirmMoved, dropSaved, familyLabel, readDraft, rebaseStale, setCell, summarize, toChanges, type Draft, type Finish, type StaleRow } from '../../core/checklist';
+import { addPending, cellKey, confirmMoved, dropSaved, familyLabel, readDraft, rebaseStale, setCell, setPending, summarize, toChanges, type Draft, type Finish, type StaleRow } from '../../core/checklist';
 
 const KEY = 'mm.collection.checklist';
 
@@ -31,6 +31,18 @@ export function useChecklist() {
   const set = useCallback((card: CollectionCardOut, finish: Finish, qty: number | null, family: string) => {
     setSaved(null);
     setDraft((d) => setCell(d, card, finish, qty, family));
+  }, []);
+
+  /** Stage `n` more copies (negative takes some back off the pending amount, never below 0). */
+  const add = useCallback((card: CollectionCardOut, finish: Finish, n: number, family: string) => {
+    setSaved(null);
+    setDraft((d) => addPending(d, card, finish, n, family));
+  }, []);
+
+  /** Stage exactly `n` copies to add (0 drops the cell from the draft). */
+  const setToAdd = useCallback((card: CollectionCardOut, finish: Finish, n: number, family: string) => {
+    setSaved(null);
+    setDraft((d) => setPending(d, card, finish, n, family));
   }, []);
 
   /** Keep your count in a flagged cell (all flagged cells when no card is given). */
@@ -81,7 +93,7 @@ export function useChecklist() {
     withResolver: true,
   });
 
-  return { draft, summary, dirty, set, confirm, save, saving, error, saved, discard, blocker };
+  return { draft, summary, dirty, set, add, setToAdd, confirm, save, saving, error, saved, discard, blocker };
 }
 
 export type Checklist = ReturnType<typeof useChecklist>;

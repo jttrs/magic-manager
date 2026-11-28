@@ -3105,6 +3105,18 @@ export type FamilyOption = {
      * Name
      */
     name: string;
+    /**
+     * Owned
+     *
+     * False for a paper family you own nothing from (only listed with include=unowned).
+     */
+    owned?: boolean;
+    /**
+     * Year
+     *
+     * Release year of the family's anchor set (YYYY), when known.
+     */
+    year?: string | null;
 };
 
 /**
@@ -3255,6 +3267,12 @@ export type FamilySummaryOut = {
      * The family's release date: its anchor set's (YYYY-MM-DD).
      */
     family_released_at?: string | null;
+    /**
+     * Catalog Read
+     *
+     * False when the family has no local printings yet (every set unsynced) — read it first.
+     */
+    catalog_read?: boolean;
 };
 
 /**
@@ -9600,9 +9618,23 @@ export type MarketDeckResponse = MarketDeckResponses[keyof MarketDeckResponses];
 export type CollectionFamiliesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Include
+         */
+        include?: 'unowned' | null;
+    };
     url: '/api/collection/families';
 };
+
+export type CollectionFamiliesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionFamiliesError = CollectionFamiliesErrors[keyof CollectionFamiliesErrors];
 
 export type CollectionFamiliesResponses = {
     /**

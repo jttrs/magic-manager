@@ -70,9 +70,28 @@ export function setCell(draft: Draft, c: CollectionCardOut, f: Finish, qty: numb
   return next;
 }
 
+/** Copies this draft adds to one cell (0 when untouched or lowered). */
+export function pendingOf(draft: Draft, id: string, finish: Finish): number {
+  const e = draft[cellKey(id, finish)];
+  return e ? Math.max(0, e.qty - e.was) : 0;
+}
+
+/** Set a cell to "what you owned + n copies to add" (0 drops it). */
+export function setPending(draft: Draft, c: CollectionCardOut, f: Finish, n: number, familyName: string): Draft {
+  const was = draft[cellKey(c.scryfall_id, f)]?.was ?? ownedOf(c, f);
+  return setCell(draft, c, f, was + Math.max(0, n), familyName);
+}
+
+/** Add n copies (negative = take some back off the pending amount, never below 0). */
+export function addPending(draft: Draft, c: CollectionCardOut, f: Finish, n: number, familyName: string): Draft {
+  return setPending(draft, c, f, pendingOf(draft, c.scryfall_id, f) + n, familyName);
+}
+
 export type DraftSummary = {
   /** Cells changed. */
   cells: number;
+  /** Every changed cell only goes up (and there is at least one). */
+  addsOnly: boolean;
   added: number;
   removed: number;
   /** Market value of the change (unpriced copies count $0). */
@@ -87,7 +106,7 @@ export type DraftSummary = {
 };
 
 export function summarize(draft: Draft): DraftSummary {
-  const s: DraftSummary = { cells: 0, added: 0, removed: 0, value: 0, unpriced: 0, belowPledged: [], moved: 0, families: [] };
+  const s: DraftSummary = { cells: 0, addsOnly: false, added: 0, removed: 0, value: 0, unpriced: 0, belowPledged: [], moved: 0, families: [] };
   const fams = new Set<string>();
   for (const e of Object.values(draft)) {
     const d = e.qty - e.was;
@@ -101,6 +120,7 @@ export function summarize(draft: Draft): DraftSummary {
     if (e.moved) s.moved += 1;
     fams.add(e.family);
   }
+  s.addsOnly = s.cells > 0 && s.removed === 0;
   s.families = [...fams].sort();
   s.value = Math.round(s.value * 100) / 100;
   return s;
@@ -220,4 +240,36 @@ export function summaryLine(s: DraftSummary, saved: ChecklistOut | null): string
   if (!s.cells) return 'Modifying counts · type how many you have; Enter moves down, ←/→ switch finish, Esc undoes a cell';
   const val = `${s.value >= 0 ? '+' : '−'}${fmtUsd(Math.abs(s.value))}`;
   return `Modifying counts · ${fmtInt(s.cells)} ${s.cells === 1 ? 'change' : 'changes'} · ${copies(s.added, s.removed)} · ${val} at market${s.unpriced ? ` (${fmtInt(s.unpriced)} unpriced)` : ''}`;
+}
+
+/** The pending bar's status line: what the draft adds ("To add"), what the last save added, or the
+ *  mixed-draft wording of `summaryLine` when counts also go down. */
+export function pendingBarLine(s: DraftSummary, saved: ChecklistOut | null): string {
+  if (saved && !s.cells && saved.rows.length && saved.copies_removed === 0) return `Added ${fmtInt(saved.copies_added)} ${saved.copies_added === 1 ? 'copy' : 'copies'}`;
+  if (!s.addsOnly) return summaryLine(s, saved);
+  const val = `+${fmtUsd(s.value)}`;
+  return `To add · ${fmtInt(s.cells)} ${s.cells === 1 ? 'printing' : 'printings'} · ${fmtInt(s.added)} ${s.added === 1 ? 'copy' : 'copies'} · ${val} at market${s.unpriced ? ` (${fmtInt(s.unpriced)} unpriced)` : ''}`;
+}
+
+/** The printings the draft touches (any finish). */
+export function draftedIds(draft: Draft): Set<string> {
+  return new Set(Object.values(draft).map((e) => e.id));
+}
+
+/** Review: keep only the cards in `ids`, dropping sections (and family heads) left empty. */
+export function onlyDrafted<S extends { level?: 1 | 2; items: { key: string }[] }>(sections: readonly S[], ids: ReadonlySet<string>): S[] {
+  const out: S[] = [];
+  let head: S | null = null;
+  for (const s of sections) {
+    if (s.level === 1) {
+      head = s;
+      continue;
+    }
+    const items = s.items.filter((c) => ids.has(c.key));
+    if (!items.length) continue;
+    if (head) out.push(head);
+    head = null;
+    out.push({ ...s, items });
+  }
+  return out;
 }

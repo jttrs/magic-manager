@@ -6,11 +6,12 @@ import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
 import { CardHover } from './CardHover';
 import { MarkToggle } from './MarkToggle';
 import { Pressable } from './controls/Pressable';
+import { TallyControls, type Tally } from './TallyControls';
 
-type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; onInspect?: (card: GuideCard) => void; barLabels?: [string, string] };
+type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; onInspect?: (card: GuideCard) => void; barLabels?: [string, string]; tally?: Tally; pendingNf?: number; pendingFo?: number };
 
 /** List view: one ruled line per card — list toggle marks it, the name opens the inspector (hover previews the art). */
-export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'] }: Props) {
+export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'], tally, pendingNf = 0, pendingFo = 0 }: Props) {
   return (
     <div className={`grid min-h-[var(--size-row-h)] grid-cols-[1.75rem_minmax(4rem,1fr)_auto_auto] @[18rem]:grid-cols-[1.75rem_var(--size-thumb)_minmax(5.5rem,1fr)_auto_auto] items-center gap-2 ruled px-1 ${selected ? 'highlighter' : ''}`}>
       <MarkToggle name={card.name} marked={selected} onToggle={() => onToggle(card.key)} size="sm" />
@@ -48,6 +49,8 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
             </span>
             <span className="w-8 text-right text-2xs tabular text-ink">{fmtPct(card.pct)}</span>
           </span>
+        ) : tally ? (
+          <TallyControls card={card} tally={tally} pendingNf={pendingNf} pendingFo={pendingFo} />
         ) : (
           <Holdings card={card} />
         )}

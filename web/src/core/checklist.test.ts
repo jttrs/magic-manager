@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut } from './api';
-import { confirmMoved, dropSaved, rebaseStale, summaryLine, cellValue, countFinishes, familyLabel, nextCell, parseCount, readDraft, setCell, summarize, toChanges, type Draft } from './checklist';
+import { addPending, draftedIds, onlyDrafted, pendingBarLine, pendingOf, setPending, confirmMoved, dropSaved, rebaseStale, summaryLine, cellValue, countFinishes, familyLabel, nextCell, parseCount, readDraft, setCell, summarize, toChanges, type Draft } from './checklist';
 
 const card = (over: Partial<CollectionCardOut> = {}): CollectionCardOut => ({
   scryfall_id: 'a', oracle_id: null, name: 'Alpha', family: 'tst', set_code: 'tst', collector_number: '1', rarity: 'rare',
@@ -112,5 +112,59 @@ describe('checklist draft', () => {
     expect(familyLabel(['A'])).toBe('A');
     expect(familyLabel(['A', 'B'])).toBe('A, B');
     expect(familyLabel(['A', 'B', 'C'])).toBe('A +2');
+  });
+});
+
+describe('pending adds', () => {
+  it('adds on top of owned, floors at 0 and drops an empty entry', () => {
+    const c = card();
+    let d: Draft = {};
+    expect(pendingOf(d, 'a', 'nonfoil')).toBe(0);
+    d = addPending(d, c, 'nonfoil', 1, 'Test');
+    d = addPending(d, c, 'nonfoil', 1, 'Test');
+    expect(cellValue(d, c, 'nonfoil')).toBe(5);
+    expect(pendingOf(d, 'a', 'nonfoil')).toBe(2);
+    d = addPending(d, c, 'nonfoil', -1, 'Test');
+    expect(pendingOf(d, 'a', 'nonfoil')).toBe(1);
+    d = addPending(d, c, 'nonfoil', -5, 'Test');
+    expect(d).toEqual({});
+  });
+
+  it('sets an absolute amount and keeps the starting count', () => {
+    const c = card();
+    let d = setPending({}, c, 'foil', 4, 'Test');
+    expect(cellValue(d, c, 'foil')).toBe(4);
+    d = setPending(d, c, 'foil', 2, 'Test');
+    expect(cellValue(d, c, 'foil')).toBe(2);
+    expect(pendingOf(d, 'a', 'foil')).toBe(2);
+    expect(setPending(d, c, 'foil', 0, 'Test')).toEqual({});
+  });
+
+  it('flags an adds-only draft', () => {
+    const c = card();
+    expect(summarize({}).addsOnly).toBe(false);
+    const up = addPending({}, c, 'nonfoil', 2, 'Test');
+    expect(summarize(up).addsOnly).toBe(true);
+    expect(summarize(setCell(up, c, 'foil', 0, 'Test')).addsOnly).toBe(true);
+    expect(summarize(setCell(up, card({ scryfall_id: 'b', owned: { nonfoil: 2 } }), 'nonfoil', 1, 'Test')).addsOnly).toBe(false);
+  });
+});
+
+describe('pending bar', () => {
+  const c = card();
+  const adds = addPending(addPending({}, c, 'nonfoil', 2, 'T'), card({ scryfall_id: 'b', price_usd: null }), 'nonfoil', 1, 'T');
+  it('says what the draft adds, and what a save added', () => {
+    expect(pendingBarLine(summarize(adds), null)).toBe('To add · 2 printings · 3 copies · +$4.00 at market (1 unpriced)');
+    const saved = { ingest_id: 1, added: 0, updated: 2, zeroed: 0, copies_added: 23, copies_removed: 0, rows: [{ scryfall_id: 'a', finish: 'nonfoil', old_qty: 3, new_qty: 5 }] };
+    expect(pendingBarLine(summarize({}), saved)).toBe('Added 23 copies');
+  });
+  it('keeps the mixed wording when a count goes down', () => {
+    const mixed = setCell(adds, card({ scryfall_id: 'c' }), 'nonfoil', 1, 'T');
+    expect(pendingBarLine(summarize(mixed), null)).toBe(summaryLine(summarize(mixed), null));
+  });
+  it('review keeps only drafted cards and the heads that still have any', () => {
+    const sec = (key: string, level: 1 | 2, ...items: string[]) => ({ key, level, items: items.map((k) => ({ key: k })) });
+    const out = onlyDrafted([sec('f1', 1), sec('f1:a', 2, 'a', 'x'), sec('f2', 1), sec('f2:b', 2, 'y')], draftedIds(adds));
+    expect(out.map((s) => [s.key, s.items.map((i) => i.key)])).toEqual([['f1', []], ['f1:a', ['a']]]);
   });
 });
