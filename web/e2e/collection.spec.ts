@@ -270,19 +270,27 @@ test('a search with characters the browser re-encodes does not keep rewriting th
   await expect(page.getByRole('searchbox', { name: 'Card name' })).toHaveValue("Ahoy Mateys'");
 });
 
-test('card tags: search any Tagger tag, pick it, and only cards carrying it stay', async ({ page }) => {
+test('card tags: one picker, search any Tagger tag, pick it, and only cards carrying it stay', async ({ page }) => {
   const keep = cards.slice(0, 3).map((c) => c.oracle_id!);
   await page.route((u) => u.pathname === '/api/oracle-tags', (r) =>
     r.fulfill({ json: { synced: true, tags: [{ id: 't1', slug: 'burn', label: 'burn', cards: 3 }] } }));
   await page.route((u) => u.pathname === '/api/oracle-tags/cards', (r) =>
     r.fulfill({ json: { tags: [{ id: 't1', slug: 'burn', label: 'burn' }], oracle_ids: keep } }));
   await page.goto(COLLECTION_ALL_URL);
-  await page.getByRole('searchbox', { name: 'Card tags' }).fill('bur');
-  await page.getByRole('button', { name: /^burn/ }).click();
+  const picker = page.getByRole('button', { name: /Card tags/ });
+  await picker.click();
+  // Empty search: the Function shortlist; typing adds every Scryfall tag below it.
+  await expect(page.getByRole('group', { name: /Functions/ })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search functions and card tags' }).fill('bur');
+  await page.getByRole('group', { name: 'All Scryfall tags' }).getByRole('checkbox', { name: /burn/ }).check();
   await expect(page).toHaveURL(/ot=burn/);
+  await page.keyboard.press('Escape');
+  await expect(picker).toContainText('burn');
   const expected = cards.filter((c) => keep.includes(c.oracle_id!)).length;
   await expect(page.getByRole('article')).toHaveCount(expected);
-  await page.getByRole('button', { name: 'Remove card tag burn' }).click();
+  // A picked tag stays listed (checked) when the search is empty, so it can be unticked there.
+  await picker.click();
+  await page.getByRole('group', { name: 'Tags you picked' }).getByRole('checkbox', { name: /burn/ }).uncheck();
   await expect(page).not.toHaveURL(/ot=/);
 });
 

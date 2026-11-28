@@ -8,6 +8,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from magic_manager import config
+
 SETS = [
     {"code": "tst", "parent_set_code": None, "name": "Test Set", "set_type": "expansion", "released_at": "2025-02-01"},
     {"code": "atst", "parent_set_code": "tst", "name": "Test Art Series", "set_type": "memorabilia", "released_at": "2025-01-01"},
@@ -162,7 +164,8 @@ def test_collection_endpoint_carries_tagger_functions(client):
     by = {c["scryfall_id"]: c for c in body["cards"]}
     assert by["r1"]["functions"] == ["ramp"] and by["b3"]["functions"] == ["ramp"]
     assert by["c2"]["functions"] == []
-    assert body["functions"][0] == {"key": "ramp", "label": "Ramp"}
+    ramp = next(r for r in config.function_tags()["roots"] if r["key"] == "ramp")
+    assert body["functions"][0] == {"key": "ramp", "label": "Ramp", "tags": [t["slug"] for t in ramp["tags"]]}
 
 
 def test_anchor_set_counts_whatever_its_set_type(tmp_db, monkeypatch, seed_cards, make_card):

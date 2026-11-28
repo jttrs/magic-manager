@@ -3523,6 +3523,10 @@ export type FunctionRootOut = {
      * Label
      */
     label: string;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
 };
 
 /**

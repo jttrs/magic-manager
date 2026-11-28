@@ -75,6 +75,9 @@ class FunctionRootOut(BaseModel):
     """A curated function root (``config/function_tags.toml``), in display order."""
     key: str
     label: str
+    #: The Scryfall Tagger tag slugs it is built on (e.g. Blink = ``flicker``), so a tag
+    #: search can find the root too.
+    tags: list[str] = []
 
 
 class CompareCardOut(BaseModel):
@@ -146,8 +149,8 @@ def compare(a: str, b: str | None = None) -> CompareOut:
 
 
 def function_roots() -> list[FunctionRootOut]:
-    """The configured function roots (key + label) in display order."""
-    return [FunctionRootOut(key=r["key"], label=r["label"])
+    """The configured function roots (key, label, tag slugs) in display order."""
+    return [FunctionRootOut(key=r["key"], label=r["label"], tags=[t["slug"] for t in r["tags"]])
             for r in config.function_tags()["roots"]]
 
 

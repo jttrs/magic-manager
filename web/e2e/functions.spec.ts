@@ -74,12 +74,12 @@ test('Collection filters by Tagger function; untagged cards are their own option
   const none = cards.filter((c) => !c.functions.length).length;
   await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByRole('article')).toHaveCount(cards.length);
-  await page.getByRole('button', { name: /Function/ }).click();
+  await page.getByRole('button', { name: /Card tags/ }).click();
   await page.getByRole('checkbox', { name: /Card draw/ }).check();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/fn=/);
   await expect(page.getByRole('article')).toHaveCount(draw);
-  await page.getByRole('button', { name: /Function/ }).click();
+  await page.getByRole('button', { name: /Card tags/ }).click();
   await page.getByRole('checkbox', { name: /Card draw/ }).uncheck();
   await page.getByRole('checkbox', { name: /No tagged function/ }).check();
   await page.keyboard.press('Escape');

@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useDebounced } from '../app/useDebounced';
-import { fmtInt } from '../core/format';
+import { fmtInt, tagLabel } from '../core/format';
 import { Pressable } from './controls/Pressable';
 import { RailField } from './controls/RailField';
 import { TextInput } from './controls/TextField';
@@ -10,7 +10,6 @@ export type TagHit = { id: string; slug: string; label: string; count: number };
 export type TagHits = { synced?: boolean; tags: TagHit[]; fetching: boolean; stale: boolean };
 
 const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const tagLabel = (slug: string) => slug.replace(/-/g, ' ');
 
 /** A rail field that picks Scryfall Tagger tags (any of): chosen tags as removable
  *  chips, a search box with suggestions from the local tag cache; Enter adds the best

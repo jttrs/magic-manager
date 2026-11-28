@@ -122,7 +122,9 @@ export function CardSurfer({ raw, onChange, subnav }: { raw: string | undefined;
           aria-label="Random cards"
           aria-busy={feed.isFetching}
           onKeyDown={onKey}
-          className="h-[calc(100dvh-12rem)] snap-y snap-proximity overflow-y-auto overscroll-contain focus:outline-none lg:h-full [&>article]:min-h-full"
+          // `relative`: the feed is the containing block for its cards' sr-only labels, so they
+          // scroll (and clip) with it instead of stretching the page below the layout.
+          className="relative h-[calc(100dvh-12rem)] snap-y snap-proximity overflow-y-auto overscroll-contain focus:outline-none lg:h-full [&>article]:min-h-full"
         >
           {feed.isPending ? (
             <Skeleton />
