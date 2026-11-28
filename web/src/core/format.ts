@@ -12,3 +12,6 @@ export const fmtCount = (n: number, one: string, many = `${one}s`): string => `$
 const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 /** "Nov 12" from an ISO date or timestamp, read as the date it was stamped (UTC). */
 export const fmtDay = (iso: string | null | undefined): string => (iso ? day.format(new Date(`${iso.slice(0, 10)}T00:00:00Z`)) : '—');
+
+/** A Scryfall Tagger slug as words (`gives-evasion` → `gives evasion`); shared by every tag picker. */
+export const tagLabel = (slug: string) => slug.replace(/-/g, ' ');

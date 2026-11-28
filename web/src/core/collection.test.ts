@@ -76,6 +76,8 @@ describe('card-tag filter', () => {
     expect(filterCollection(tagged, { ...ALL, fn: ['ramp'], otIds: new Set(['o3']) }).map((c) => c.scryfall_id)).toEqual(['a', 'b', 'd']);
     // a chosen tag still resolving (empty set) narrows nothing beyond the chosen functions
     expect(filterCollection(tagged, { ...ALL, fn: ['draw'], otIds: new Set() }).map((c) => c.scryfall_id)).toEqual(['c']);
+    // every chosen tag unknown (otIds undefined): only the chosen functions narrow, never every card
+    expect(filterCollection(tagged, { ...ALL, fn: ['draw'], otIds: undefined }).map((c) => c.scryfall_id)).toEqual(['c']);
   });
   it('function counts lift the whole picker (functions and tags), so a chosen tag never zeroes them', () => {
     expect(collectionCounts(tagged, { ...ALL, otIds: new Set(['o3']) }).fn.get('ramp')).toBe(2);

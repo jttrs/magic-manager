@@ -11,13 +11,11 @@ import { triggerClass } from '../../components/controls/fieldClass';
 import { menuPanelClass } from '../../components/controls/surfaces';
 import { CaretMark } from '../../components/icons/marks';
 import { InfoTip } from '../../components/InfoTip';
-import { fmtInt } from '../../core/format';
+import { fmtInt, tagLabel } from '../../core/format';
 
 /** A Function root; `tags` = the Tagger slugs it is built on (Blink = flicker), searched too. */
 export type FunctionOption = { value: string; label: string; count: number; tags?: readonly string[] };
 export type CardTagValue = { fn: string[]; ot: string[] };
-
-const tagLabel = (slug: string) => slug.replace(/-/g, ' ');
 
 /**
  * One picker for Scryfall Tagger card tags: the curated Function roots are the shortlist
@@ -46,8 +44,10 @@ export function CardTagPicker({ functions, value, onChange, loading }: {
   const summary = chosen.length === 0 ? 'Any function or tag' : chosen.length === 1 ? chosen[0] : `${chosen[0]} +${chosen.length - 1}`;
 
   const ql = text.trim().toLowerCase();
+  // Typed as words or as a slug (`gives-evasion`), it matches either way.
+  const qWords = tagLabel(ql);
   const shownFns = ql
-    ? functions.filter((f) => f.label.toLowerCase().includes(ql) || f.tags?.some((t) => tagLabel(t).includes(ql)))
+    ? functions.filter((f) => f.label.toLowerCase().includes(qWords) || f.tags?.some((t) => tagLabel(t).includes(qWords)))
     : functions;
   // The other chosen tags stay listed (checked) while the search is empty, so you can untick them here.
   const tagRows = ql

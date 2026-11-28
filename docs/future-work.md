@@ -104,6 +104,11 @@ Small PRs, one per item.
   user scopes by its exact `(kind, set_code, name, finish)`; if Deals and Secret Lair ever key the
   same drop under different name spellings, the other spelling keeps pre-refresh totals for ≤30 min
   (unconfirmed — check the two callers' names).
+- **Card tags picker, stale search rows:** `oracleTagsQuery` keeps the previous search's data
+  (`keepPreviousData`), so for the 200 ms debounce (and on reopening the popover) *All Scryfall tags*
+  can list the previous search's rows under the new text; only an empty list says *Searching…*.
+  Rows are real tags, so nothing wrong is saved. Mark or hide placeholder rows while
+  `needle !== text` or the query is placeholder data (`web/src/views/collection/CardTagPicker.tsx`).
 
 ## 4. Deferred by decision
 
