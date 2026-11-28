@@ -83,3 +83,12 @@ def test_read_short_mark_expires(world, monkeypatch):
     with db.connect() as conn:
         db.set_catalog_setting(conn, sets.READ_SHORT_KEY, json.dumps({"new": "2020-01-01T00:00:00+00:00"}))
     assert sets.unread_set_codes(["new"]) == ["new"]
+
+
+def test_catalog_read_when_scryfall_is_unreachable(world, monkeypatch):
+    """Offline (no cached set list), the sheet still loads: the family counts as read."""
+    def down():
+        raise scry.ScryfallError("offline")
+    monkeypatch.setattr(scry, "all_sets", down)
+    monkeypatch.setattr(sets, "unsynced_set_codes", lambda codes: [])
+    assert coll._catalog_read("own") is True

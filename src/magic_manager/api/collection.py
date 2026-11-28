@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import card_earmarks, collection_view, family_status, gallery, scenes, scryfall_tags, sets
+from .. import card_earmarks, collection_view, family_status, gallery, scenes, scryfall, scryfall_tags, sets
 from .edhrec import FunctionRootOut, function_roots
 from .ids import SetCode
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
@@ -171,6 +171,16 @@ def families(include_unowned: bool = False) -> list[FamilyOption]:
     return out
 
 
+def _catalog_read(anchor: str) -> bool:
+    """Whether a family's catalog is read. The anchor set decides: an owned family's member
+    sets (tokens, art cards) are often unsynced. When Scryfall's set list can't be read
+    (offline), call it read: the sheet shows what is local and starts no read job."""
+    try:
+        return not sets.unread_set_codes([anchor])
+    except scryfall.ScryfallError:
+        return True
+
+
 def family_view(codes: list[str]) -> CollectionOut:
     summaries: list[FamilySummaryOut] = []
     cards: list[CollectionCardOut] = []
@@ -188,8 +198,7 @@ def family_view(codes: list[str]) -> CollectionOut:
         seen.add(fc.summary.code)
         summaries.append(FamilySummaryOut(
             **vars(fc.summary),
-            # The anchor set decides: an owned family's member sets (tokens, art cards) are often unsynced.
-            catalog_read=not sets.unread_set_codes([fc.summary.code]),
+            catalog_read=_catalog_read(fc.summary.code),
         ))
         scene_of = scenes.scene_card_keys(fc)
         cards.extend(
