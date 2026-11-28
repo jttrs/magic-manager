@@ -4,7 +4,7 @@ import { usePressHold } from './usePressHold';
 type Props = {
   finish: 'nonfoil' | 'foil';
   owned: number;
-  /** Copies waiting in the draft to be added. */
+  /** The draft's change to this finish: copies to add, or negative for a count lowered in Bulk modify counts. */
   pending: number;
   cardName: string;
   /** +1 on click, −1 on shift-click. */
@@ -18,21 +18,24 @@ type Props = {
 export function TallyButton({ finish, owned, pending, cardName, onAdd, onHold }: Props) {
   const press = usePressHold({ onPress: (e) => onAdd(e.shiftKey ? -1 : 1), onHold });
   const { holding, ...handlers } = press;
-  const label = `Add one ${finish} — ${owned} owned${pending > 0 ? `, ${pending} to add` : ''}`;
+  const change = pending > 0 ? `, ${pending} to add` : pending < 0 ? `, lowered by ${-pending}` : '';
+  const label = `Add one ${finish} — ${owned} owned${change}`;
   return (
     <button
       type="button"
       {...handlers}
       aria-label={`${label} (${cardName})`}
       title="Click to add one · hold for more · shift-click to remove one"
-      className={`relative inline-flex h-6 min-w-0 cursor-pointer select-none items-center gap-1 rounded-xs border px-1.5 text-2xs voice-semi text-ink transition-colors ease-guide ${pending > 0 ? 'border-highlight-solid bg-highlight' : 'border-rule bg-transparent hover:bg-paper-sunk'}`}
+      className={`relative inline-flex h-6 min-w-0 cursor-pointer select-none items-center gap-1 rounded-xs border px-1.5 text-2xs voice-semi text-ink transition-colors ease-guide ${pending !== 0 ? 'border-highlight-solid bg-highlight' : 'border-rule bg-transparent hover:bg-paper-sunk'}`}
     >
       {finish === 'foil' && <span aria-hidden>✦</span>}
       <PlusMark className="size-icon-xs shrink-0" />
       <span className="tabular">{owned}</span>
       {/* A corner badge, so staging never changes the button's width (the caption doesn't reflow). */}
-      {pending > 0 && (
-        <span aria-hidden className="pointer-events-none absolute -bottom-2 -right-1.5 rounded-pill bg-paper px-1 text-2xs font-semibold leading-tight tabular text-accent-ink ring-1 ring-highlight-solid">+{pending}</span>
+      {pending !== 0 && (
+        <span aria-hidden className={`pointer-events-none absolute -bottom-2 -right-1.5 rounded-pill bg-paper px-1 text-2xs font-semibold leading-tight tabular ring-1 ring-highlight-solid ${pending > 0 ? 'text-accent-ink' : 'text-danger'}`}>
+          {pending > 0 ? `+${pending}` : `−${-pending}`}
+        </span>
       )}
       <span
         aria-hidden

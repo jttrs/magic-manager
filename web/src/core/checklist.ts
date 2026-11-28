@@ -25,6 +25,9 @@ type DraftEntry = {
   /** The collection moved under this cell (a save came back stale): `was` was
    *  rebased to the current count and the cell waits for you to recheck it. */
   moved?: boolean;
+  /** Staged with the add buttons: the cell means "add qty − was copies", not "own qty",
+   *  so a stale save rebases it as an addition instead of a target count. */
+  adds?: boolean;
 };
 
 export type Draft = Readonly<Record<string, DraftEntry>>;
@@ -40,7 +43,7 @@ export function countFinishes(c: Pick<CollectionCardOut, 'finishes' | 'owned'>):
 
 export const ownedOf = (c: Pick<CollectionCardOut, 'owned'>, f: Finish) => c.owned[f] ?? 0;
 export const pledgedOf = (c: Pick<CollectionCardOut, 'pledged'>, f: Finish) => c.pledged[f] ?? 0;
-const unitOf = (c: Pick<CollectionCardOut, 'price_usd' | 'price_usd_foil'>, f: Finish) =>
+export const unitOf = (c: Pick<CollectionCardOut, 'price_usd' | 'price_usd_foil'>, f: Finish) =>
   f === 'foil' ? (c.price_usd_foil ?? c.price_usd ?? null) : (c.price_usd ?? null);
 
 /** The count shown in a cell: the draft's, else what you own. */
@@ -70,21 +73,30 @@ export function setCell(draft: Draft, c: CollectionCardOut, f: Finish, qty: numb
   return next;
 }
 
-/** Copies this draft adds to one cell (0 when untouched or lowered). */
+/** The draft's change to one cell, signed (+2 = two copies to add, −1 = a count lowered by one). */
 export function pendingOf(draft: Draft, id: string, finish: Finish): number {
   const e = draft[cellKey(id, finish)];
-  return e ? Math.max(0, e.qty - e.was) : 0;
+  return e ? e.qty - e.was : 0;
 }
 
-/** Set a cell to "what you owned + n copies to add" (0 drops it). */
+const markAdds = (draft: Draft, key: string): Draft => {
+  const e = draft[key];
+  return e && !e.adds ? { ...draft, [key]: { ...e, adds: true } } : draft;
+};
+
+/** Set a cell to "what you owned + n copies to add" (0 drops it). Marks it an addition. */
 export function setPending(draft: Draft, c: CollectionCardOut, f: Finish, n: number, familyName: string): Draft {
-  const was = draft[cellKey(c.scryfall_id, f)]?.was ?? ownedOf(c, f);
-  return setCell(draft, c, f, was + Math.max(0, n), familyName);
+  const key = cellKey(c.scryfall_id, f);
+  const was = draft[key]?.was ?? ownedOf(c, f);
+  return markAdds(setCell(draft, c, f, was + Math.max(0, n), familyName), key);
 }
 
-/** Add n copies (negative = take some back off the pending amount, never below 0). */
+/** Add n copies (negative = take some back off). A cell lowered in Bulk modify counts stays a
+ *  count: the step moves its typed number (never below 0) instead of replacing it with an add. */
 export function addPending(draft: Draft, c: CollectionCardOut, f: Finish, n: number, familyName: string): Draft {
-  return setPending(draft, c, f, pendingOf(draft, c.scryfall_id, f) + n, familyName);
+  const e = draft[cellKey(c.scryfall_id, f)];
+  if (e && !e.adds && e.qty < e.was) return setCell(draft, c, f, Math.max(0, e.qty + n), familyName);
+  return setPending(draft, c, f, Math.max(0, pendingOf(draft, c.scryfall_id, f)) + n, familyName);
 }
 
 export type DraftSummary = {
@@ -129,7 +141,8 @@ export function summarize(draft: Draft): DraftSummary {
 export type StaleRow = { scryfall_id: string; finish: string; expected: number; current: number };
 
 /** A save came back stale: rebase each listed cell on the collection's current
- *  count and flag it for a recheck (a cell that now already matches is dropped). */
+ *  count and flag it for a recheck (a cell that now already matches is dropped).
+ *  A staged addition keeps its copies to add on top of the new count — nothing to recheck. */
 export function rebaseStale(draft: Draft, rows: readonly StaleRow[]): Draft {
   const next = { ...draft };
   for (const r of rows) {
@@ -137,7 +150,8 @@ export function rebaseStale(draft: Draft, rows: readonly StaleRow[]): Draft {
     const key = cellKey(r.scryfall_id, r.finish);
     const e = next[key];
     if (!e) continue;
-    if (e.qty === r.current) delete next[key];
+    if (e.adds) next[key] = { ...e, was: r.current, qty: r.current + (e.qty - e.was) };
+    else if (e.qty === r.current) delete next[key];
     else next[key] = { ...e, was: r.current, moved: true };
   }
   return next;
@@ -197,6 +211,7 @@ export function readDraft(raw: string | null): Draft {
           name: typeof v.name === 'string' ? v.name : v.id,
           family: typeof v.family === 'string' ? v.family : '',
           ...(v.moved === true ? { moved: true } : {}),
+          ...(v.adds === true ? { adds: true } : {}),
         };
       }
     }

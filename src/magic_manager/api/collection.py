@@ -166,20 +166,9 @@ def families(include_unowned: bool = False) -> list[FamilyOption]:
         key=lambda f: f.name,
     )
     if include_unowned:
-        have = set(parents)
-        for p in paper:
-            code = p["value"]
-            if code in have or code in family_status.NON_FAMILY_SETS:
-                continue
-            try:
-                if family_status._family_parent(code)[0] in have:   # grouped under an owned family (mar -> spm)
-                    continue
-            except LookupError:
-                pass
-            out.append(FamilyOption(code=code, name=p["label"], owned=False, year=p["year"]))
+        out += [FamilyOption(code=p["value"], name=p["label"], owned=False, year=p["year"])
+                for p in family_status.unowned_paper_families(set(parents))]
     return out
-
-
 
 
 def family_view(codes: list[str]) -> CollectionOut:
@@ -260,6 +249,9 @@ def _run_read_family(inp: ReadFamilyInput, progress: ProgressFn) -> JobResult:
             progress(ProgressEvent(done=batch, total=batches, message=f"{name}: {cards} cards read"))
 
         sets.sync(todo, progress=tick)
+        # What Scryfall holds no (or few) English printings of stays short after a full read:
+        # remember it, or the family would read as unread — and be read again — forever.
+        sets.mark_read_short(sets.unread_set_codes(todo))
     return JobResult(summary=f"Read {name}" if todo else f"{name} was already read",
                      artifacts=[Artifact(kind="json", label="family",
                                          data={"family": inp.family, "name": name, "synced": todo})])

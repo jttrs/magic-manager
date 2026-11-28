@@ -140,6 +140,34 @@ describe('pending adds', () => {
     expect(setPending(d, c, 'foil', 0, 'Test')).toEqual({});
   });
 
+  it('a stale save keeps staged adds as additions on top of the new count', () => {
+    const c = card();
+    const d = addPending({}, c, 'nonfoil', 2, 'Test');                 // own 3, add 2
+    // A copy arrived some other way: still adding 2, on top of 4, nothing to recheck.
+    const one = rebaseStale(d, [{ scryfall_id: 'a', finish: 'nonfoil', expected: 3, current: 4 }]);
+    expect(cellValue(one, c, 'nonfoil')).toBe(6);
+    expect(pendingOf(one, 'a', 'nonfoil')).toBe(2);
+    expect(summarize(one).moved).toBe(0);
+    // Two arrived: still +2 (never turned into a removal).
+    const two = rebaseStale(d, [{ scryfall_id: 'a', finish: 'nonfoil', expected: 3, current: 5 }]);
+    expect(pendingOf(two, 'a', 'nonfoil')).toBe(2);
+    expect(summarize(two).removed).toBe(0);
+    // It survives a reload.
+    expect(readDraft(JSON.stringify(two))).toEqual(two);
+  });
+
+  it('a typed count stays a count when the add buttons are pressed on it', () => {
+    const c = card();                                                   // own 3
+    const lowered = setCell({}, c, 'nonfoil', 1, 'Test');               // typed 3 → 1
+    expect(pendingOf(lowered, 'a', 'nonfoil')).toBe(-2);
+    const up = addPending(lowered, c, 'nonfoil', 1, 'Test');
+    expect(cellValue(up, c, 'nonfoil')).toBe(2);                        // 1 → 2, not 3 + 1
+    expect(cellValue(addPending(lowered, c, 'nonfoil', -1, 'Test'), c, 'nonfoil')).toBe(0);
+    expect(addPending(up, c, 'nonfoil', 1, 'Test')).toEqual({});        // back to what you own
+    // A stale save still asks you to recheck a typed count.
+    expect(summarize(rebaseStale(lowered, [{ scryfall_id: 'a', finish: 'nonfoil', expected: 3, current: 4 }])).moved).toBe(1);
+  });
+
   it('flags an adds-only draft', () => {
     const c = card();
     expect(summarize({}).addsOnly).toBe(false);

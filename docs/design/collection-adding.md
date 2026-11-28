@@ -68,13 +68,13 @@ The Holdings caption line today: `[mark] ×2  ✦×1` or `[mark] MISSING`. It be
 
 ```
 grid tile caption           [☰]  [＋ 2]  [✦＋ 1]
-pending                      [☰]  [＋ 2 +3] [✦＋ 1]      ← +3 accent-ink, caption takes the highlighter
+pending                      [☰]  [＋ 2]³ [✦＋ 1]        ← button takes the highlight, +3 corner badge in accent ink
 missing printing            [☰]  [＋ —]  [✦＋ —]          ← MISSING moves to the art tone (already dimmed)
 no foil printing            [☰]  [＋ 0]                    ← ✦ button absent, not disabled
 ```
 
 - Two compact `IconAction`-family buttons (new `TallyButton` control, so `noHandRolled` stays green): plus glyph + owned count in tabular figures; foil uses the existing `✦` mark. Etched counts as foil (as everywhere else).
-- **Click / tap / Enter / Space = +1 pending.** Pending shows as a signed accent-ink `+N` after the owned count — the same mark the count table uses. The whole caption takes the `highlighter` (an edited line in the table does too), so a pending card is findable while scrolling.
+- **Click / tap / Enter / Space = +1 pending.** Pending fills the button with the `highlight` and hangs an accent-ink `+N` badge on its corner (as built: the caption highlighter is the marked-card look, and an inline `+N` widened the button and wrapped the foil button to a second line).
 - **Press-and-hold (≥ 400 ms) / long-press on touch / Shift+Enter / context-menu key = amount picker.** While held, a 2px amber underline grows across the button (amber = progress; `prefers-reduced-motion`: no growth, opens at the threshold). Releasing early is a click. The browser's own long-press menu is suppressed on these buttons only.
 - **Amount picker** (`Popover`, `menuPanelClass`, anchored to the button):
   ```
@@ -124,7 +124,7 @@ Nothing in its table or keys. It inherits the unowned-families switch (so a new 
 
 ## 7. Constraints and open decisions
 
-- **D1 — who may read a new family's catalog when hosted.** `sets.sync` is catalog-scope (admins only). Options: let members trigger a read of a *single family* (rate-limited, `scope="catalog"` exception), or show *Ask an admin to read this family*. Recommend: allow a single-family read for members (it's the only way they can catalogue).
+- **D1 — who may read a new family's catalog when hosted.** `sets.sync` is catalog-scope (admins only). Options: let members trigger a read of a *single family* (rate-limited, `scope="catalog"` exception), or show *Ask an admin to read this family*. Recommend: allow a single-family read for members (it's the only way they can catalogue). **Resolved (built):** `collection.read_family` is a `shared`-scope job like `decks.read_recipes`, so members can run it; it reads one family's sets only, and a set a full read leaves short (no English printings) is not read again for 7 days.
 - **D2 — provenance of grid adds.** `apply_counts` writes a `checklist` (replace-mode) event, which History can't revert. An adds-only draft should post as an **additive** event (method `adhoc`, label `web:collection · <families>`) so *Revert this import* works; mixed drafts stay `checklist`. Engine change in `sets.apply_counts` (or route adds-only drafts to `addcards.commit`) — decide before build.
 - **D3 — tally buttons always visible, or behind an "Add" toggle in the header strip?** Recommend always visible: the caption already carries holdings, and staging makes a mis-tap cheap. If the price-guide reading gets noisy at 120px tiles, fall back to showing them on hover/focus on pointer devices (always on touch).
 - Reuse: `useChecklist`/`core/checklist` (draft), `MultiSelect` (+ a `footerToggle`/`header` slot), `Popover` + `menuPanelClass`, `TextInput`, `IconAction` styles, `EmptyNote`, job chassis. New control: `TallyButton` (+ a tiny `usePressHold` hook in `app/`).

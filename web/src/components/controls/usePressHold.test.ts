@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MouseEvent } from 'react';
 import { createPressHold } from './usePressHold';
 
-const click = { shiftKey: false } as MouseEvent;
+const click = { shiftKey: false, detail: 1 } as MouseEvent;
+const keyClick = { shiftKey: false, detail: 0 } as MouseEvent;
 
 function setup() {
   const onPress = vi.fn();
@@ -79,5 +80,15 @@ describe('press and hold', () => {
     g.contextMenu({ preventDefault });
     expect(preventDefault).toHaveBeenCalled();
     expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
+  it('a hold released off the button never swallows the next keyboard press', () => {
+    const { g, onPress, onHold } = setup();
+    g.down({ button: 0 });
+    vi.advanceTimersByTime(400);
+    g.cancel();                       // pointer left: no click follows the hold
+    expect(onHold).toHaveBeenCalledTimes(1);
+    g.click(keyClick);                // Enter later
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 });

@@ -14,7 +14,7 @@ import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
 import { CardTagPicker } from './collection/CardTagPicker';
-import { draftedIds, summaryLine, onlyDrafted, pendingOf } from '../core/checklist';
+import { draftedIds, summaryLine, onlyDrafted, pendingOf, unitOf } from '../core/checklist';
 import { ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { PendingBar } from './collection/PendingBar';
 import { useChecklist } from './collection/useChecklist';
@@ -181,7 +181,7 @@ export function CollectionView() {
       },
       unitUsd: (card, finish) => {
         const c = row(card);
-        return c ? (finish === 'foil' ? (c.price_usd_foil ?? c.price_usd ?? null) : (c.price_usd ?? null)) : null;
+        return c ? unitOf(c, finish) : null;
       },
     };
   }, [draftAdd, draftSetToAdd]);
@@ -232,7 +232,9 @@ export function CollectionView() {
     if (readError) startedReads.current.delete(readError.family);
     setReadError(null);
   };
-  const readingName = reading ? (q.data?.families.find((f) => f.code === reading)?.name ?? reading.toUpperCase()) : null;
+  /** A family's name from the sheet's own payload, else the picker's list (else its code). */
+  const sheetFamName = (code: string) => q.data?.families.find((f) => f.code === code)?.name ?? famName(code);
+  const readingName = reading ? sheetFamName(reading) : null;
   const readStatus = readingName ? `Reading ${readingName}${readLive?.log.at(-1)?.msg ? ` · ${readLive.log.at(-1)!.msg}` : ''}` : null;
   const onlyUnread = unread.length > 0 && unread.length === (q.data?.families.length ?? -1);
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
@@ -365,7 +367,7 @@ export function CollectionView() {
   } else if (q.isError) {
     body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   } else if (onlyUnread && readError) {
-    body = <ErrorNote error={new Error(`Couldn’t read ${famName(readError.family)}: ${readError.message}`)} onRetry={retryRead} />;
+    body = <ErrorNote error={new Error(`Couldn’t read ${sheetFamName(readError.family)}: ${readError.message}`)} onRetry={retryRead} />;
   } else if (onlyUnread && (reading || !readError)) {
     body = <EmptyNote title={readStatus ?? 'Reading this family…'}>Fetching its printings so they can be listed. This takes a moment.</EmptyNote>;
   } else if (!view || view.cards.length === 0) {
@@ -460,7 +462,7 @@ export function CollectionView() {
           {readStatus && !onlyUnread && <p role="status" aria-live="polite" className="mx-sheet py-2 text-sm text-ink-muted">{readStatus}</p>}
           {readError && !onlyUnread && (
             <p role="alert" className="mx-sheet flex flex-wrap items-center gap-x-3 py-2 text-sm text-danger">
-              Couldn’t read {famName(readError.family)}: {readError.message}
+              Couldn’t read {sheetFamName(readError.family)}: {readError.message}
               <Button tone="paper" emphasis="link" onClick={retryRead}>Retry</Button>
             </p>
           )}

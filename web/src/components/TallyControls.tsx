@@ -41,7 +41,7 @@ export function TallyControls({ card, tally, pendingNf, pendingFo }: Props) {
             finish={f}
             cardName={card.name}
             owned={owned}
-            pending={pending[f]}
+            pending={Math.max(0, pending[f])}
             unitUsd={tally.unitUsd?.(card, f)}
             onApply={(n) => tally.setPending(card, f, n)}
             anchor={

@@ -87,3 +87,44 @@ test('the families filter falls through to families you do not own', async ({ pa
   // Families you don't own carry their year where owned ones carry a count.
   await expect(page.getByText('2020')).toBeVisible();
 });
+
+const sse = (events: [string, unknown][]) => events.map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
+const readJob = (id: string) => ({ id, name: 'collection.read_family', title: 'collection.read_family', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null });
+const unread = { ...collectionZnr, cards: [], families: collectionZnr.families.map((f) => ({ ...f, printings: 0, missing_printings: 0, missing_usd: 0, catalog_read: false })) };
+
+/** The collection answers `first` until the read job ends, then `after`; jobs records each POST body. */
+async function mockRead(page: Page, events: [string, unknown][], first: unknown, after: unknown) {
+  await mockApi(page);
+  const jobs: unknown[] = [];
+  let collectionCalls = 0;
+  await page.route('**/api/collection?**', (r) => {
+    const url = new URL(r.request().url());
+    if (url.pathname !== '/api/collection' || !url.searchParams.getAll('families').includes('znr')) return r.fallback();
+    collectionCalls += 1;
+    return r.fulfill({ json: collectionCalls === 1 ? first : after });
+  });
+  await page.route('**/api/jobs/collection.read_family', (r) => { jobs.push(r.request().postDataJSON()); return r.fulfill({ status: 202, json: readJob(`rf${jobs.length}`) }); });
+  await page.route('**/api/jobs/rf*/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse(events) }));
+  return { jobs, calls: () => collectionCalls };
+}
+
+test('an unread family is read for you once, then the collection reloads with its cards', async ({ page }) => {
+  const { jobs, calls } = await mockRead(page, [['status', { status: 'running' }], ['status', { status: 'succeeded' }]], unread, collectionZnr);
+  await page.goto('/collection?families=znr&show=owned,missing');
+  await expect(page.getByRole('article')).toHaveCount(4);
+  expect(jobs).toHaveLength(1);
+  expect(jobs[0]).toMatchObject({ family: 'znr' });
+  expect(calls()).toBe(2);
+  await expect(page.getByText('Reading Zendikar Rising')).toHaveCount(0);
+  expect(jobs).toHaveLength(1);
+});
+
+test('a failed read says why and Try again starts it again', async ({ page }) => {
+  const { jobs } = await mockRead(page, [['status', { status: 'running' }], ['error', { error: 'Scryfall is down' }], ['status', { status: 'failed' }]], unread, unread);
+  await page.goto('/collection?families=znr&show=owned,missing');
+  await expect(page.getByText('Couldn’t read Zendikar Rising: Scryfall is down')).toBeVisible();
+  expect(jobs).toHaveLength(1);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect.poll(() => jobs.length).toBe(2);
+  expect(jobs[1]).toMatchObject({ family: 'znr' });
+});

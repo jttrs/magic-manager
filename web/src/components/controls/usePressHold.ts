@@ -42,10 +42,9 @@ export function createPressHold(get: () => Press, setHolding: (v: boolean) => vo
       }
     },
     click(e: MouseEvent) {
-      if (consumed) {
-        consumed = false;
-        return;
-      }
+      const swallow = consumed && e.detail !== 0;   // a keyboard click (detail 0) is never the hold's own
+      consumed = false;
+      if (swallow) return;
       get().onPress(e);
     },
   };

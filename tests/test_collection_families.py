@@ -58,3 +58,28 @@ def test_read_family_syncs_only_unsynced(world, monkeypatch):
     calls.clear()
     res = coll._run_read_family(coll.ReadFamilyInput(family="own"), events.append)
     assert calls == [] and res.artifacts[0].data["synced"] == []
+
+
+def test_read_that_finds_no_english_printings_is_not_repeated(world, monkeypatch):
+    """A set Scryfall holds no English printings of (Renaissance) stays short after a
+    full read; it must stop reading as unread, or the sheet waits and re-reads forever."""
+    calls = []
+    monkeypatch.setattr(sets, "sync", lambda codes, progress=None: calls.append(list(codes)) or 0)
+    assert coll.family_view(["new"]).families[0].catalog_read is False
+    coll._run_read_family(coll.ReadFamilyInput(family="new"), lambda e: None)
+    assert calls == [["new"]]
+    assert coll.family_view(["new"]).families[0].catalog_read is True
+    calls.clear()
+    coll._run_read_family(coll.ReadFamilyInput(family="new"), lambda e: None)
+    assert calls == []
+
+
+def test_read_short_mark_expires(world, monkeypatch):
+    """A set still in preview is read again once the mark is older than STALE_AFTER_DAYS."""
+    import json
+    from magic_manager import db
+    sets.mark_read_short(["new"])
+    assert sets.unread_set_codes(["new"]) == []
+    with db.connect() as conn:
+        db.set_catalog_setting(conn, sets.READ_SHORT_KEY, json.dumps({"new": "2020-01-01T00:00:00+00:00"}))
+    assert sets.unread_set_codes(["new"]) == ["new"]
