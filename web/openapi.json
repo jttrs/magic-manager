@@ -2522,17 +2522,46 @@
         ],
         "summary": "Collection Families",
         "operationId": "collection_families",
+        "parameters": [
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "unowned",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/FamilyOption"
                   },
-                  "type": "array",
                   "title": "Response Collection Families"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -10331,6 +10360,24 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "owned": {
+            "type": "boolean",
+            "title": "Owned",
+            "description": "False for a paper family you own nothing from (only listed with include=unowned).",
+            "default": true
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year of the family's anchor set (YYYY), when known."
           }
         },
         "type": "object",
@@ -10596,6 +10643,12 @@
             ],
             "title": "Family Released At",
             "description": "The family's release date: its anchor set's (YYYY-MM-DD)."
+          },
+          "catalog_read": {
+            "type": "boolean",
+            "title": "Catalog Read",
+            "description": "False when the family has no local printings yet (every set unsynced) \u2014 read it first.",
+            "default": true
           }
         },
         "type": "object",

@@ -552,8 +552,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # ---------- collection ----------
 
     @app.get("/api/collection/families", response_model=list[collection_api.FamilyOption], tags=["collection"])
-    def collection_families():
-        return collection_api.families()
+    def collection_families(include: Literal["unowned"] | None = None):
+        return collection_api.families(include_unowned=include == "unowned")
 
     @app.get("/api/collection", response_model=collection_api.CollectionOut, tags=["collection"])
     def collection(families: Annotated[list[str], Query(min_length=1)]):

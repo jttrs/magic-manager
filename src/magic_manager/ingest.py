@@ -436,7 +436,7 @@ _NOT_REVERTIBLE = {
     "revert": "This is already a revert.",
 }
 _CHECKLIST_NOT_REVERTIBLE = (
-    "Only set checklists that added cards can be reverted — a checklist that set counts "
+    "Only checklists that only added cards can be reverted — a checklist that set counts "
     "(or a precon / Jumpstart sheet) is changed back with another checklist."
 )
 
@@ -513,7 +513,8 @@ def not_revertible_reason(method: str, mode: str | None, label: str | None, stat
     if status != "success":
         return "Reconstructed history can't be reverted." if status == "backfill" else "This import failed."
     if method == "checklist":
-        return None if mode == "additive" and (label or "").startswith("set:") else _CHECKLIST_NOT_REVERTIBLE
+        additive_sheet = mode == "additive" and (label or "").startswith(("set:", "web:checklist"))
+        return None if additive_sheet else _CHECKLIST_NOT_REVERTIBLE
     if method not in REVERTIBLE_METHODS:
         return _NOT_REVERTIBLE.get(method, "This kind of change can't be reverted.")
     return None

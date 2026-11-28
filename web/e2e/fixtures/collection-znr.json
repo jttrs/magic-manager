@@ -1,0 +1,147 @@
+{
+ "families": [
+  {
+   "code": "znr",
+   "name": "Zendikar Rising",
+   "printings": 4,
+   "owned_printings": 0,
+   "owned_copies": 0,
+   "owned_usd": 0,
+   "missing_printings": 4,
+   "missing_usd": 6.0,
+   "sets": [
+    {
+     "code": "znr",
+     "name": "Zendikar Rising"
+    }
+   ],
+   "catalog_read": true
+  }
+ ],
+ "cards": [
+  {
+   "scryfall_id": "znr00000-0000-4000-8000-000000000001",
+   "oracle_id": "znr00000-0000-4000-9000-000000000001",
+   "name": "Anticausal Vestige",
+   "family": "znr",
+   "set_code": "znr",
+   "collector_number": "10",
+   "rarity": "rare",
+   "type_line": "Creature",
+   "cmc": 5.0,
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "released_at": "2024-08-02",
+   "finishes": [
+    "nonfoil",
+    "foil"
+   ],
+   "owned": {},
+   "pledged": {},
+   "price_usd": 1.5,
+   "price_usd_foil": 3.0,
+   "image_uri": "https://cards.scryfall.io/normal/front/4/3/436d6a84-4cea-4ca7-94aa-9d08280652af.jpg?1783910801",
+   "scryfall_url": "https://scryfall.com/card/znr/10",
+   "treatment": "",
+   "standard_frame": true,
+   "is_bulk": false,
+   "is_chase": false,
+   "functions": []
+  },
+  {
+   "scryfall_id": "znr00000-0000-4000-8000-000000000002",
+   "oracle_id": "znr00000-0000-4000-9000-000000000002",
+   "name": "Bygone Colossus",
+   "family": "znr",
+   "set_code": "znr",
+   "collector_number": "11",
+   "rarity": "rare",
+   "type_line": "Creature",
+   "cmc": 5.0,
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "released_at": "2024-08-02",
+   "finishes": [
+    "nonfoil",
+    "foil"
+   ],
+   "owned": {},
+   "pledged": {},
+   "price_usd": 1.5,
+   "price_usd_foil": 3.0,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/9/f9dc7b8e-d381-49a0-a7f8-c8cd9acadc54.jpg?1783910761",
+   "scryfall_url": "https://scryfall.com/card/znr/11",
+   "treatment": "",
+   "standard_frame": false,
+   "is_bulk": false,
+   "is_chase": false,
+   "functions": []
+  },
+  {
+   "scryfall_id": "znr00000-0000-4000-8000-000000000003",
+   "oracle_id": "znr00000-0000-4000-9000-000000000003",
+   "name": "Cryogen Relic",
+   "family": "znr",
+   "set_code": "znr",
+   "collector_number": "12",
+   "rarity": "rare",
+   "type_line": "Creature",
+   "cmc": 2.0,
+   "color_identity": [
+    "R"
+   ],
+   "released_at": "2024-08-02",
+   "finishes": [
+    "nonfoil",
+    "foil"
+   ],
+   "owned": {},
+   "pledged": {},
+   "price_usd": 1.5,
+   "price_usd_foil": 3.0,
+   "image_uri": "https://cards.scryfall.io/normal/front/8/b/8b9e51d9-189b-4dd6-87cb-628ea6373e81.jpg?1783910825",
+   "scryfall_url": "https://scryfall.com/card/znr/12",
+   "treatment": "",
+   "standard_frame": true,
+   "is_bulk": false,
+   "is_chase": false,
+   "functions": []
+  },
+  {
+   "scryfall_id": "znr00000-0000-4000-8000-000000000004",
+   "oracle_id": "znr00000-0000-4000-9000-000000000004",
+   "name": "Dawnstrike Vanguard",
+   "family": "znr",
+   "set_code": "znr",
+   "collector_number": "13",
+   "rarity": "rare",
+   "type_line": "Creature",
+   "cmc": 2.0,
+   "color_identity": [
+    "U"
+   ],
+   "released_at": "2024-08-02",
+   "finishes": [
+    "nonfoil",
+    "foil"
+   ],
+   "owned": {},
+   "pledged": {},
+   "price_usd": 1.5,
+   "price_usd_foil": 3.0,
+   "image_uri": "https://cards.scryfall.io/normal/front/2/1/211af1bf-910b-41a5-b928-f378188d1871.jpg?1783910852",
+   "scryfall_url": "https://scryfall.com/card/znr/13",
+   "treatment": "",
+   "standard_frame": true,
+   "is_bulk": false,
+   "is_chase": false,
+   "functions": []
+  }
+ ],
+ "skipped": [],
+ "functions": []
+}

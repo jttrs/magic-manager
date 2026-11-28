@@ -10,7 +10,8 @@
  */
 export type PickMode = 'scope' | 'include' | 'exclude';
 
-export type PickOption = { value: string; label: string };
+/** `bulk: false` keeps an option out of Select all / Clear all / Select shown / Clear shown (it is only ever picked by hand). */
+export type PickOption = { value: string; label: string; bulk?: false };
 
 export type BulkAction = { label: string; next: string[] };
 
@@ -46,7 +47,9 @@ export function pickCount(mode: PickMode, options: readonly PickOption[], value:
  * the ones a filter box shows), so an option that isn't on screen — a zero-count
  * rarity, say — is never hidden or chosen behind your back.
  */
-export function bulkActions(mode: PickMode, listed: readonly PickOption[], value: readonly string[], filtering: boolean): BulkAction[] {
+export function bulkActions(mode: PickMode, all: readonly PickOption[], value: readonly string[], filtering: boolean): BulkAction[] {
+  const listed = all.filter((o) => o.bulk !== false);
+  const handPicked = new Set(all.filter((o) => o.bulk === false).map((o) => o.value));
   const keys = new Set(listed.map((o) => o.value));
   const add = (): string[] => [...new Set([...value, ...listed.map((o) => o.value)])];
   const drop = (): string[] => value.filter((v) => !keys.has(v));
@@ -66,7 +69,7 @@ export function bulkActions(mode: PickMode, listed: readonly PickOption[], value
   }
   if (mode === 'scope') {
     if (!allOn) out.push({ label: 'Select all', next: add() });
-    if (value.length) out.push({ label: 'Clear all', next: [] });
+    if (value.some((v) => !handPicked.has(v))) out.push({ label: 'Clear all', next: value.filter((v) => handPicked.has(v)) });
     return out;
   }
   // include: an empty selection already shows everything.

@@ -1105,7 +1105,10 @@ def apply_counts(changes: Iterable[CountChange], *, label: str, conn=None) -> di
         tally = {"added": 0, "updated": 0, "zeroed": 0}
         rows: list[dict] = []
         plus = minus = 0
-        with ingest_mod.open_ingest_event("checklist", label=label, mode="replace", conn=c) as rec:
+        # Adds-only saves are a pure addition on the ledger, so they can be reverted.
+        additive = all(ch.qty >= owned.get((ch.scryfall_id, ch.finish), 0) for ch in items)
+        with ingest_mod.open_ingest_event("checklist", label=label,
+                                          mode="additive" if additive else "replace", conn=c) as rec:
             for ch in items:
                 old = owned.get((ch.scryfall_id, ch.finish), 0)
                 outcome = _write_count(c, rec.ingest_id, ch.scryfall_id, ch.finish, ch.qty)
@@ -2122,6 +2125,67 @@ def unsynced_set_codes(codes: Iterable[str]) -> list[str]:
         }
         present -= _partial_codes(conn)
     return [c for c in wanted if c not in present]
+
+
+# Sets a full read left short (no or few English printings, e.g. Renaissance /
+# Rinascimento): read, so ``unread_set_codes`` stops asking for them — for
+# STALE_AFTER_DAYS, so a set still in preview is read again once it has released.
+READ_SHORT_KEY = "sets.read_short"
+
+
+def unread_set_codes(codes: Iterable[str]) -> list[str]:
+    """``unsynced_set_codes`` plus the sets holding fewer than half of Scryfall's
+    ``card_count`` locally — rows an old lookup added before V36 tracked partial
+    sets (e.g. 33 of Lorwyn's 301). A synced set sits within a few printings of
+    its count (English prints only), so half is a safe line. A set a full read
+    already left short (``mark_read_short``) is never unread again."""
+    wanted = sorted({c.lower() for c in codes if c})
+    if not wanted:
+        return []
+    out = set(unsynced_set_codes(wanted))
+    counts = {s["code"].lower(): s.get("card_count") or 0 for s in scryfall.all_sets()}
+    with db.connect() as conn:
+        ph = ",".join("?" for _ in wanted)
+        local = dict(conn.execute(
+            f"SELECT set_code, COUNT(*) FROM cards WHERE set_code IN ({ph}) GROUP BY set_code", wanted).fetchall())
+        read_short = _read_short_codes(conn)
+    out.update(c for c in wanted if local.get(c, 0) * 2 < counts.get(c, 0))
+    return sorted(out - read_short)
+
+
+def _read_short_at(conn) -> dict[str, str]:
+    """{code: when a full read left it short} — entries older than STALE_AFTER_DAYS dropped."""
+    try:
+        marks = json.loads(db.catalog_setting(conn, READ_SHORT_KEY) or "{}")
+    except ValueError:
+        return {}
+    if not isinstance(marks, dict):
+        return {}
+    cutoff = datetime.now(timezone.utc).timestamp() - STALE_AFTER_DAYS * 86400
+    out = {}
+    for code, at in marks.items():
+        try:
+            if datetime.fromisoformat(at).timestamp() >= cutoff:
+                out[code] = at
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _read_short_codes(conn) -> set[str]:
+    return set(_read_short_at(conn))
+
+
+def mark_read_short(codes: Iterable[str]) -> None:
+    """Remember sets a full read could not fill, so they are not read again for a while."""
+    new = {c.lower() for c in codes if c}
+    if not new:
+        return
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with db.connect() as conn:
+        marks = _read_short_at(conn) | {c: now for c in new}
+        db.set_catalog_setting(conn, READ_SHORT_KEY, json.dumps(dict(sorted(marks.items()))))
+        conn.commit()
 
 
 # Prices older than this many days are considered stale and trigger a re-sync

@@ -1,0 +1,193 @@
+[
+ {
+  "code": "dft",
+  "name": "Aetherdrift",
+  "owned": true
+ },
+ {
+  "code": "acr",
+  "name": "Assassin's Creed",
+  "owned": true
+ },
+ {
+  "code": "tla",
+  "name": "Avatar: The Last Airbender",
+  "owned": true
+ },
+ {
+  "code": "blb",
+  "name": "Bloomburrow",
+  "owned": true
+ },
+ {
+  "code": "c21",
+  "name": "Commander 2021",
+  "owned": true
+ },
+ {
+  "code": "clb",
+  "name": "Commander Legends: Battle for Baldur's Gate",
+  "owned": true
+ },
+ {
+  "code": "dmu",
+  "name": "Dominaria United",
+  "owned": true
+ },
+ {
+  "code": "dsk",
+  "name": "Duskmourn: House of Horror",
+  "owned": true
+ },
+ {
+  "code": "znr",
+  "name": "Zendikar Rising",
+  "owned": true
+ },
+ {
+  "code": "pip",
+  "name": "Fallout",
+  "owned": true
+ },
+ {
+  "code": "fin",
+  "name": "Final Fantasy",
+  "owned": true
+ },
+ {
+  "code": "fdn",
+  "name": "Foundations",
+  "owned": true
+ },
+ {
+  "code": "inr",
+  "name": "Innistrad Remastered",
+  "owned": true
+ },
+ {
+  "code": "vow",
+  "name": "Innistrad: Crimson Vow",
+  "owned": true
+ },
+ {
+  "code": "mid",
+  "name": "Innistrad: Midnight Hunt",
+  "owned": true
+ },
+ {
+  "code": "neo",
+  "name": "Kamigawa: Neon Dynasty",
+  "owned": true
+ },
+ {
+  "code": "ecl",
+  "name": "Lorwyn Eclipsed",
+  "owned": true
+ },
+ {
+  "code": "mom",
+  "name": "March of the Machine",
+  "owned": true
+ },
+ {
+  "code": "mat",
+  "name": "March of the Machine: The Aftermath",
+  "owned": true
+ },
+ {
+  "code": "msh",
+  "name": "Marvel Super Heroes",
+  "owned": true
+ },
+ {
+  "code": "spm",
+  "name": "Marvel's Spider-Man",
+  "owned": true
+ },
+ {
+  "code": "mh3",
+  "name": "Modern Horizons 3",
+  "owned": true
+ },
+ {
+  "code": "mkm",
+  "name": "Murders at Karlov Manor",
+  "owned": true
+ },
+ {
+  "code": "otj",
+  "name": "Outlaws of Thunder Junction",
+  "owned": true
+ },
+ {
+  "code": "one",
+  "name": "Phyrexia: All Will Be One",
+  "owned": true
+ },
+ {
+  "code": "sos",
+  "name": "Secrets of Strixhaven",
+  "owned": true
+ },
+ {
+  "code": "spg",
+  "name": "Special Guests",
+  "owned": true
+ },
+ {
+  "code": "snc",
+  "name": "Streets of New Capenna",
+  "owned": true
+ },
+ {
+  "code": "stx",
+  "name": "Strixhaven: School of Mages",
+  "owned": true
+ },
+ {
+  "code": "tdm",
+  "name": "Tarkir: Dragonstorm",
+  "owned": true
+ },
+ {
+  "code": "tmt",
+  "name": "Teenage Mutant Ninja Turtles",
+  "owned": true
+ },
+ {
+  "code": "bro",
+  "name": "The Brothers' War",
+  "owned": true
+ },
+ {
+  "code": "hob",
+  "name": "The Hobbit",
+  "owned": true
+ },
+ {
+  "code": "ltr",
+  "name": "The Lord of the Rings: Tales of Middle-earth",
+  "owned": true
+ },
+ {
+  "code": "lci",
+  "name": "The Lost Caverns of Ixalan",
+  "owned": true
+ },
+ {
+  "code": "40k",
+  "name": "Warhammer 40,000 Commander",
+  "owned": true
+ },
+ {
+  "code": "woe",
+  "name": "Wilds of Eldraine",
+  "owned": true
+ },
+ {
+  "code": "znr",
+  "name": "Zendikar Rising",
+  "owned": false,
+  "year": "2020"
+ }
+]

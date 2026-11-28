@@ -11,8 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import card_earmarks, collection_view, family_status, gallery, scenes, scryfall_tags, sets
+from .. import card_earmarks, collection_view, family_status, gallery, scenes, scryfall, scryfall_tags, sets
 from .edhrec import FunctionRootOut, function_roots
+from .ids import SetCode
+from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
 
@@ -20,6 +22,8 @@ BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
 class FamilyOption(BaseModel):
     code: str
     name: str
+    owned: bool = Field(True, description="False for a paper family you own nothing from (only listed with include=unowned).")
+    year: str | None = Field(None, description="Release year of the family's anchor set (YYYY), when known.")
 
 
 class SetRefOut(BaseModel):
@@ -38,6 +42,7 @@ class FamilySummaryOut(BaseModel):
     missing_usd: float
     sets: list[SetRefOut] = Field(default_factory=list, description="Member sets with printings, oldest first.")
     family_released_at: str | None = Field(None, description="The family's release date: its anchor set's (YYYY-MM-DD).")
+    catalog_read: bool = Field(True, description="False when the family has no local printings yet (every set unsynced) — read it first.")
 
 
 class CollectionCardOut(BaseModel):
@@ -149,14 +154,31 @@ class ChecklistOut(BaseModel):
     rows: list[CountRowOut]
 
 
-def families() -> list[FamilyOption]:
-    """Families the collection touches (owned or registered), for the picker."""
+def families(include_unowned: bool = False) -> list[FamilyOption]:
+    """Families the collection touches (owned or registered), for the picker.
+    ``include_unowned`` appends every other top-level paper family (newest first)."""
     parents = family_status._owned_family_parents()
-    return sorted(
-        (FamilyOption(code=c, name=n) for c, n in parents.items()
+    paper = sets.paper_families()
+    year = {p["value"]: p["year"] for p in paper}
+    out = sorted(
+        (FamilyOption(code=c, name=n, year=year.get(c)) for c, n in parents.items()
          if c not in family_status.NON_FAMILY_SETS),
         key=lambda f: f.name,
     )
+    if include_unowned:
+        out += [FamilyOption(code=p["value"], name=p["label"], owned=False, year=p["year"])
+                for p in family_status.unowned_paper_families(set(parents))]
+    return out
+
+
+def _catalog_read(anchor: str) -> bool:
+    """Whether a family's catalog is read. The anchor set decides: an owned family's member
+    sets (tokens, art cards) are often unsynced. When Scryfall's set list can't be read
+    (offline), call it read: the sheet shows what is local and starts no read job."""
+    try:
+        return not sets.unread_set_codes([anchor])
+    except scryfall.ScryfallError:
+        return True
 
 
 def family_view(codes: list[str]) -> CollectionOut:
@@ -174,7 +196,10 @@ def family_view(codes: list[str]) -> CollectionOut:
         if fc.summary.code in seen:   # two member codes of one family
             continue
         seen.add(fc.summary.code)
-        summaries.append(FamilySummaryOut(**vars(fc.summary)))
+        summaries.append(FamilySummaryOut(
+            **vars(fc.summary),
+            catalog_read=_catalog_read(fc.summary.code),
+        ))
         scene_of = scenes.scene_card_keys(fc)
         cards.extend(
             CollectionCardOut(
@@ -217,3 +242,35 @@ def save_checklist(req: ChecklistIn) -> ChecklistOut:
         label=f"web:checklist · {req.family}",
     )
     return ChecklistOut(**res)
+
+
+# ---------- job: read a family's catalog ----------
+
+class ReadFamilyInput(BaseModel):
+    family: SetCode = Field(description="Any set code of the family to read.")
+
+
+def _run_read_family(inp: ReadFamilyInput, progress: ProgressFn) -> JobResult:
+    _, name, related = family_status.resolve_family(inp.family)
+    todo = sets.unread_set_codes([r["code"].lower() for r in related])
+    if todo:
+        def tick(batch: int, batches: int, cards: int) -> None:
+            progress(ProgressEvent(done=batch, total=batches, message=f"{name}: {cards} cards read"))
+
+        sets.sync(todo, progress=tick)
+        # What Scryfall holds no (or few) English printings of stays short after a full read:
+        # remember it, or the family would read as unread — and be read again — forever.
+        sets.mark_read_short(sets.unread_set_codes(todo))
+    return JobResult(summary=f"Read {name}" if todo else f"{name} was already read",
+                     artifacts=[Artifact(kind="json", label="family",
+                                         data={"family": inp.family, "name": name, "synced": todo})])
+
+
+READ_FAMILY = register(JobSpec(
+    name="collection.read_family",
+    title="Read a set family",
+    description="Fetch a family's printings (Scryfall) for the sets with no local cards, so Collection can show it.",
+    input_model=ReadFamilyInput,
+    run=_run_read_family,
+    scope="shared",
+))

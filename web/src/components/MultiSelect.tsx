@@ -9,7 +9,16 @@ import { triggerClass } from './controls/fieldClass';
 import { menuPanelClass } from './controls/surfaces';
 import { CaretMark } from './icons/marks';
 
-type MultiOption = { value: string; label: string; count?: number; group?: string };
+type MultiOption = {
+  value: string;
+  label: string;
+  count?: number;
+  group?: string;
+  /** Muted tabular meta at the right where `count` would show (e.g. a year). */
+  hint?: string;
+  /** `false` = left out of Select all / Clear all / Select shown / Clear shown. */
+  bulk?: false;
+};
 
 type Props = {
   label: string;
@@ -29,6 +38,10 @@ type Props = {
   labelExtra?: ReactNode;
   /** Options are still loading: the trigger reads "Loading…" and stays shut. */
   loading?: boolean;
+  /** Rendered in the header block under the bulk row, before the list (e.g. a switch). */
+  headerExtra?: ReactNode;
+  /** Rendered when the filter matches nothing. */
+  emptyExtra?: (query: string) => ReactNode;
 };
 
 /**
@@ -36,7 +49,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', searchable = true, keepOrder = false, labelExtra, loading = false }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', searchable = true, keepOrder = false, labelExtra, loading = false, headerExtra, emptyExtra }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -105,9 +118,13 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                 ))}
                 <span className="ml-auto tabular text-on-chrome-muted">{pickCount(mode, options, value)}</span>
               </div>
+              {headerExtra}
             </div>
             <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
-              {shown.length === 0 && <p className="px-3 py-2 text-sm text-on-chrome-muted">No {noun} match “{q}”.</p>}
+              {shown.length === 0 && (
+                emptyExtra ? <div className="flex flex-col items-start gap-1 px-3 py-2 text-sm text-on-chrome-muted">{emptyExtra(q)}</div>
+                  : <p className="px-3 py-2 text-sm text-on-chrome-muted">No {noun} match “{q}”.</p>
+              )}
               {groups.map(([group, opts]) => (
                 <fieldset key={group || 'all'} className="py-0.5">
                   <legend className={group ? 'flex w-full items-baseline gap-2 px-3 pb-1 pt-2' : 'sr-only'}>
@@ -126,6 +143,7 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                       <Check checked={selected.has(o.value)} onChange={() => toggle(o.value)} />
                       <span className={`min-w-0 flex-1 ${grouped ? "line-clamp-2 break-words" : "truncate"}`}>{o.label}</span>
                       {o.count != null && <span className="tabular text-xs text-on-chrome-muted">{o.count}</span>}
+                      {o.hint != null && <span className="tabular text-xs text-on-chrome-muted">{o.hint}</span>}
                     </label>
                   ))}
                 </fieldset>

@@ -256,11 +256,15 @@ function CountCell({ label, was, value, pledged, moved, focused, grabFocus, onFo
   );
 }
 
-/** Discard (confirmed) + the one commit, Save. */
+/** Discard (confirmed) + the one commit: "Add N copies" for a draft that only adds, else "Save N changes". */
 export function ChecklistActions({ checklist: c }: { checklist: Checklist }) {
   const [confirm, setConfirm] = useState(false);
   const low = c.summary.belowPledged;
   const n = c.summary.cells;
+  const adds = c.summary.addsOnly;
+  const copies = c.summary.added;
+  const commit = adds ? `Add ${fmtInt(copies)} ${copies === 1 ? 'copy' : 'copies'}` : n ? `Save ${fmtInt(n)} ${n === 1 ? 'change' : 'changes'}` : 'Save';
+  const thrown = adds ? `${fmtInt(copies)} ${copies === 1 ? 'copy' : 'copies'}` : `${fmtInt(n)} ${n === 1 ? 'count' : 'counts'}`;
   return (
     <>
       <Button tone="paper" disabled={!c.dirty || c.saving} onClick={() => setConfirm(true)}>Discard</Button>
@@ -270,10 +274,10 @@ export function ChecklistActions({ checklist: c }: { checklist: Checklist }) {
         title={c.summary.moved ? 'Recheck the flagged counts first' : low.length ? `${low[0].name} can’t go below the ${low[0].min} in built decks` : undefined}
         onClick={() => void c.save()}
       >
-        {c.saving ? 'Saving…' : n ? `Save ${fmtInt(n)} ${n === 1 ? 'change' : 'changes'}` : 'Save'}
+        {c.saving ? (adds ? 'Adding…' : 'Saving…') : commit}
       </Button>
-      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={`Discard ${fmtInt(n)} ${n === 1 ? 'count' : 'counts'}?`} confirmLabel="Discard counts" onConfirm={async () => c.discard()}>
-        <p>Your collection stays as it was. The counts you typed are thrown away.</p>
+      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={`Discard ${thrown}?`} confirmLabel={adds ? 'Discard copies' : 'Discard counts'} onConfirm={async () => c.discard()}>
+        <p>{adds ? 'Your collection stays as it was. The copies you staged are thrown away.' : 'Your collection stays as it was. The counts you typed are thrown away.'}</p>
       </ConfirmDialog>
     </>
   );

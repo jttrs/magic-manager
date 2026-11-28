@@ -328,3 +328,23 @@ def _owned_family_parents() -> dict[str, str]:
         if pc not in parents:
             parents[pc] = pn
     return parents
+
+
+def unowned_paper_families(owned: set[str] | None = None) -> list[dict]:
+    """Every top-level paper family (``sets.paper_families`` rows, newest first)
+    the collection doesn't touch: not an owned parent, not a NON_FAMILY_SETS
+    code, and not grouped under an owned family (``mar`` → ``spm``).
+    ``owned`` = the owned parent codes, when the caller already has them."""
+    have = set(_owned_family_parents()) if owned is None else owned
+    out = []
+    for p in sets_mod.paper_families():
+        code = p["value"]
+        if code in have or code in NON_FAMILY_SETS:
+            continue
+        try:
+            if _family_parent(code)[0] in have:
+                continue
+        except LookupError:
+            pass
+        out.append(p)
+    return out

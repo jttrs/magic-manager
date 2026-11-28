@@ -459,6 +459,24 @@ export function CheckMark(p: MarkProps) {
   );
 }
 
+/** Add one (the tally chip, the amount picker). */
+export function PlusMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.6} {...p}>
+      <path d="M8 3v10M3 8h10" />
+    </svg>
+  );
+}
+
+/** Take one away. */
+export function MinusMark(p: MarkProps) {
+  return (
+    <svg {...small} strokeWidth={1.6} {...p}>
+      <path d="M3 8h10" />
+    </svg>
+  );
+}
+
 /** Close / clear / remove. */
 export function CloseMark(p: MarkProps) {
   return (

@@ -63,10 +63,11 @@ export const cardSearchQuery = (q: string) =>
     placeholderData: keepPreviousData,
   });
 
-export const familiesQuery = () =>
+/** Families you own; `includeUnowned` adds every other paper family (newest first, after yours). */
+export const familiesQuery = (includeUnowned = false) =>
   queryOptions({
-    queryKey: ['collection', 'families'],
-    queryFn: async ({ signal }) => unwrap(await collectionFamilies({ signal })),
+    queryKey: includeUnowned ? ['collection', 'families', 'all'] : ['collection', 'families'],
+    queryFn: async ({ signal }) => unwrap(await collectionFamilies({ ...(includeUnowned ? { query: { include: 'unowned' as const } } : {}), signal })),
     staleTime: 5 * 60_000,
   });
 
