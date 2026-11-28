@@ -11,7 +11,7 @@ import { AddCardMark, CartCheckMark, CountCardsMark } from '../components/icons/
 import { IconAction } from '../components/IconAction';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
-import { OracleTagField } from './collection/OracleTagField';
+import { CardTagPicker } from './collection/CardTagPicker';
 import { summaryLine } from '../core/checklist';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { useChecklist } from './collection/useChecklist';
@@ -109,16 +109,16 @@ export function CollectionView() {
       .filter((t) => !counts || (counts.get(t.key) ?? 0) > 0 || search.exclude.includes(t.key))
       .map((t) => ({ value: t.key, label: t.label, count: counts?.get(t.key) ?? 0 }));
   const fnCounts = facetData?.fn ?? null;
-  // Offered while the payload has any tagged function at all, however the other filters narrow it.
+  // The Function shortlist: roots some card carries (or already chosen), plus "No tagged function".
   const hasFunctions = !!q.data?.cards.some((c) => c.functions?.length);
   const fnOptions = q.data && fnCounts && hasFunctions
     ? [
-        ...(q.data.functions ?? []).filter((r) => (fnCounts.get(r.key) ?? 0) > 0 || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0 })),
+        ...(q.data.functions ?? []).filter((r) => (fnCounts.get(r.key) ?? 0) > 0 || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0, tags: r.tags })),
         { value: NO_FUNCTION, label: 'No tagged function', count: fnCounts.get(NO_FUNCTION) ?? 0 },
       ]
-    : null;
-  // Shown as "Loading…" until the payload says whether any card has a function.
-  const fnLoading = fams.isPending || (scope.length > 0 && q.isPending);
+    : [];
+  // "Loading…" until the payload says which functions exist.
+  const tagsLoading = fams.isPending || (scope.length > 0 && q.isPending);
 
   const cartCheck = useFeature('cart_check');
   const checklist = useChecklist();
@@ -211,23 +211,12 @@ export function CollectionView() {
           onChange={(mode) => set({ exclude: setGroupIncluded(search.exclude, 'Chase', mode === 'exclude' ? ['chase:no'] : ['chase:yes', 'chase:no']) })}
           options={[{ value: 'include', label: 'Include' }, { value: 'exclude', label: 'Exclude' }]}
         />
-        {(fnOptions || fnLoading) && (
-          <MultiSelect
-            label="Function"
-            loading={!fnOptions}
-            labelExtra={
-              <InfoTip label="Where do functions come from?">
-                What the card does, from Scryfall’s community tags (Tagger). A card can have several functions. <b>No tagged function</b> means none of these.
-              </InfoTip>
-            }
-            noun="functions"
-            searchable={false}
-            value={search.fn}
-            onChange={(fn) => set({ fn })}
-            options={fnOptions ?? []}
-          />
-        )}
-        <OracleTagField value={search.ot} onChange={(ot) => set({ ot })} />
+        <CardTagPicker
+          functions={fnOptions}
+          loading={tagsLoading}
+          value={{ fn: search.fn, ot: search.ot }}
+          onChange={({ fn, ot }) => set({ fn, ot })}
+        />
         <Segmented
           label="Earmarked"
           showLabel

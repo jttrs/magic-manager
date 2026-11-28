@@ -71,7 +71,15 @@ describe('card-tag filter', () => {
     expect(filterCollection(tagged, { ...ALL })).toHaveLength(4);
     expect(filterCollection(tagged, { ...ALL, otIds: new Set() })).toHaveLength(0);
   });
-  it('other controls count under the tag filter', () => {
-    expect(collectionCounts(tagged, { ...ALL, otIds: new Set(['o0', 'o1']) }).fn.get('ramp')).toBe(2);
+  it('functions and tags are one picker: a card matches ANY chosen function or tag', () => {
+    // o3 is d (no function); ramp keeps a and b
+    expect(filterCollection(tagged, { ...ALL, fn: ['ramp'], otIds: new Set(['o3']) }).map((c) => c.scryfall_id)).toEqual(['a', 'b', 'd']);
+    // a chosen tag still resolving (empty set) narrows nothing beyond the chosen functions
+    expect(filterCollection(tagged, { ...ALL, fn: ['draw'], otIds: new Set() }).map((c) => c.scryfall_id)).toEqual(['c']);
+  });
+  it('function counts lift the whole picker (functions and tags), so a chosen tag never zeroes them', () => {
+    expect(collectionCounts(tagged, { ...ALL, otIds: new Set(['o3']) }).fn.get('ramp')).toBe(2);
+    // ...but other filters still apply
+    expect(collectionCounts(tagged, { ...ALL, otIds: new Set(['o3']), exclude: ['rarity:common'] }).fn.get('ramp')).toBe(1);
   });
 });

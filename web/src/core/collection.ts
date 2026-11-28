@@ -12,11 +12,12 @@ export type CollectionFilters = {
   q: string;
   /** Missing printings only of cards you own in no printing anywhere. */
   gaps?: boolean;
-  /** Scryfall Tagger function roots to keep (OR); empty = no function filter. */
+  /** Scryfall Tagger function roots to keep; ORed with `otIds` (one card-tag picker). */
   fn?: readonly string[];
   /** Only printings of cards you earmarked. */
   em?: boolean;
-  /** Cards carrying the chosen oracle tags (resolved server-side to oracle ids); absent = no tag filter. */
+  /** Cards carrying the chosen oracle tags (resolved server-side to oracle ids); absent = no tag
+   *  filter. A card shows when it matches ANY chosen function or tag. */
   otIds?: ReadonlySet<string>;
 };
 
@@ -90,7 +91,7 @@ function ownedCopies(c: CollectionCardOut, exclude: readonly string[]): number {
   return ownedIn(c, allowedFinishes(c, new Set(exclude)));
 }
 
-type CollectionFacet = 'em' | 'q' | 'fn' | 'ot' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
+type CollectionFacet = 'em' | 'q' | 'tags' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
 
 const FACET_GROUP: Record<'rarity' | 'treatment' | 'chase', TraitGroup> = { rarity: 'Rarity', treatment: 'Treatment', chase: 'Chase' };
 
@@ -120,8 +121,10 @@ function collectionFacets(f: CollectionFilters): Facets<CollectionCardOut, Colle
   return {
     em: (c) => !f.em || !!c.earmarked,
     q: (c) => !q || c.name.toLowerCase().includes(q),
-    fn: (c) => !fn.size || fnKeys(c).some((k) => fn.has(k)),
-    ot: (c) => !f.otIds || (c.oracle_id != null && f.otIds.has(c.oracle_id)),
+    // Functions and card tags are one picker: any chosen function OR tag keeps a card.
+    tags: (c) => (!fn.size && !f.otIds)
+      || (fn.size > 0 && fnKeys(c).some((k) => fn.has(k)))
+      || (!!f.otIds && c.oracle_id != null && f.otIds.has(c.oracle_id)),
     rarity, treatment, chase,
     finish: (c) => allowedFinishes(c, excluded).length > 0,
     show: (c) => {
@@ -170,7 +173,7 @@ export function collectionCounts(cards: readonly CollectionCardOut[], f: Collect
   return {
     show,
     traits,
-    fn: facetCounts(cards, facets, 'fn', fnKeys),
+    fn: facetCounts(cards, facets, 'tags', fnKeys),
   };
 }
 

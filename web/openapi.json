@@ -10988,6 +10988,14 @@
           "label": {
             "type": "string",
             "title": "Label"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
           }
         },
         "type": "object",
